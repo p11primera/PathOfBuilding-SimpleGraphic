@@ -13,16 +13,21 @@ vcpkg_from_github(
         msvcbuild.patch
         003-do-not-set-macosx-deployment-target.patch
         pob-wide-crt.patch
+        006-fix-getenvcopy-null-guard.patch
         ${extra_patches}
 )
 
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
-# On macOS, cmake-get-vars captures an empty CMAKE_OSX_SYSROOT even when the
-# SDK is found implicitly.  This leaves a bare "-isysroot " in the detected
-# C/CXX flags, which breaks make-based builds (string.h not found).
-# Fix: ask xcrun for the real SDK path and rewrite the flags.
+# On macOS, the cmake-vars probe (used by vcpkg_configure_make) may detect an
+# empty CMAKE_OSX_SYSROOT and embed a bare "-isysroot " in the flags like:
+#   VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE "-fPIC -arch arm64 -isysroot   -O3 -DNDEBUG"
+# This breaks make-based builds with "string.h: No such file or directory".
+#
+# vcpkg_configure_make calls z_vcpkg_get_cmake_vars internally and includes the
+# resulting cmake-vars-<triplet>{,-rel}.cmake.log file.  We need those files to
+# contain a real sysroot path.
 if(VCPKG_TARGET_IS_OSX)
     execute_process(
         COMMAND xcrun --show-sdk-path
@@ -30,25 +35,97 @@ if(VCPKG_TARGET_IS_OSX)
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     if(_osx_sdk)
-        # Replace "-isysroot <nothing-up-to-next-flag>" with the real value.
-        foreach(_var
-            VCPKG_DETECTED_CMAKE_C_FLAGS       VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE
-            VCPKG_DETECTED_CMAKE_C_FLAGS_DEBUG
-            VCPKG_DETECTED_CMAKE_CXX_FLAGS     VCPKG_DETECTED_CMAKE_CXX_FLAGS_RELEASE
-            VCPKG_DETECTED_CMAKE_CXX_FLAGS_DEBUG
-            VCPKG_DETECTED_RAW_CMAKE_C_FLAGS   VCPKG_DETECTED_RAW_CMAKE_CXX_FLAGS
-            VCPKG_DETECTED_CMAKE_SHARED_LINKER_FLAGS
-            VCPKG_DETECTED_CMAKE_SHARED_LINKER_FLAGS_DEBUG
-            VCPKG_DETECTED_CMAKE_SHARED_LINKER_FLAGS_RELEASE
-            VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS
-            VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS_DEBUG
-            VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS_RELEASE
-        )
-            if(DEFINED ${_var})
-                string(REGEX REPLACE "-isysroot +([^ ]*)" "-isysroot ${_osx_sdk}" ${_var} "${${_var}}")
-                string(REGEX REPLACE "-isysroot$" "-isysroot ${_osx_sdk}" ${_var} "${${_var}}")
+        set(_dst_rel "${CURRENT_BUILDTREES_DIR}/cmake-vars-${TARGET_TRIPLET}-rel.cmake.log")
+        set(_src_rel "${CURRENT_BUILDTREES_DIR}/cmake-get-vars-${TARGET_TRIPLET}-rel.cmake.log")
+
+        # Helper macro: patch a cmake vars file so that bare " -isysroot " is replaced
+        # with " -isysroot <real_sdk_path> ".  Appends set() overrides at the end of
+        # the file so they win over any earlier broken set() calls.
+        macro(z_luajit_patch_cmake_vars_file _pfile)
+            if(EXISTS "${_pfile}")
+                file(READ "${_pfile}" _fc)
+                # Skip if already patched
+                string(FIND "${_fc}" "z_luajit_sysroot_fixed" _already_patched)
+                if(_already_patched EQUAL -1)
+                    set(_patch_lines "# z_luajit_sysroot_fixed: sysroot corrected by LuaJIT portfile\n")
+                    # Process known flag variables that may contain a broken -isysroot.
+                    # We read each variable's current value from the cmake file using regex
+                    # (set(VARNAME "value")) and rewrite it with a real sysroot.
+                    foreach(_vn
+                        VCPKG_DETECTED_CMAKE_C_FLAGS
+                        VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE
+                        VCPKG_DETECTED_CMAKE_CXX_FLAGS
+                        VCPKG_DETECTED_CMAKE_CXX_FLAGS_RELEASE
+                        VCPKG_DETECTED_RAW_CMAKE_C_FLAGS
+                        VCPKG_DETECTED_RAW_CMAKE_CXX_FLAGS
+                        VCPKG_DETECTED_CMAKE_SHARED_LINKER_FLAGS
+                        VCPKG_DETECTED_CMAKE_SHARED_LINKER_FLAGS_RELEASE
+                        VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS
+                        VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS_RELEASE
+                        VCPKG_DETECTED_CMAKE_MODULE_LINKER_FLAGS
+                        VCPKG_DETECTED_CMAKE_MODULE_LINKER_FLAGS_RELEASE
+                        VCPKG_DETECTED_RAW_CMAKE_SHARED_LINKER_FLAGS
+                        VCPKG_DETECTED_RAW_CMAKE_EXE_LINKER_FLAGS
+                        VCPKG_COMBINED_C_FLAGS_RELEASE
+                        VCPKG_COMBINED_CXX_FLAGS_RELEASE
+                        VCPKG_COMBINED_SHARED_LINKER_FLAGS_RELEASE
+                        VCPKG_COMBINED_EXE_LINKER_FLAGS_RELEASE
+                    )
+                        # Extract the value from the last set(<vn> "...") line in the file
+                        string(REGEX MATCH "set\\(${_vn} \"([^\"]*)\"\\)" _vmatch "${_fc}")
+                        if(_vmatch)
+                            set(_vv "${CMAKE_MATCH_1}")
+                            # Check if value contains -isysroot (may be bare or with a path)
+                            string(FIND "${_vv}" "-isysroot" _has_sysroot)
+                            if(NOT _has_sysroot EQUAL -1)
+                                # Two-pass strip of -isysroot:
+                                # Pass 1: strip "-isysroot /real/path" (space + path starting with /)
+                                string(REGEX REPLACE " -isysroot /[^ ]*" "" _vv "${_vv}")
+                                # Pass 2: strip bare " -isysroot" and any trailing spaces that
+                                # immediately follow (handles both end-of-string and spaces before next flag)
+                                string(REGEX REPLACE " -isysroot *" " " _vv "${_vv}")
+                                string(STRIP "${_vv}" _vv)
+                                # Append with correct sysroot
+                                string(APPEND _patch_lines "set(${_vn} \"${_vv} -isysroot ${_osx_sdk}\")\n")
+                            endif()
+                        endif()
+                    endforeach()
+                    string(APPEND _fc "${_patch_lines}")
+                    file(WRITE "${_pfile}" "${_fc}")
+                endif()
             endif()
+        endmacro()
+
+        # Patch the rel file that z_vcpkg_get_cmake_vars uses.
+        # If it doesn't exist yet, seed it from the cmake-get-vars rel file first.
+        if(NOT EXISTS "${_dst_rel}" AND EXISTS "${_src_rel}")
+            file(READ "${_src_rel}" _seed_content)
+            file(WRITE "${_dst_rel}" "${_seed_content}")
+        endif()
+        z_luajit_patch_cmake_vars_file("${_dst_rel}")
+
+        # Also patch the cmake-get-vars rel file (used by portfile's include above)
+        z_luajit_patch_cmake_vars_file("${_src_rel}")
+
+        # Create wrapper files for both code paths in z_vcpkg_get_cmake_vars:
+        #   cmake-vars-<triplet>.cmake.log         (VCPKG_BUILD_TYPE undefined in function scope)
+        #   cmake-vars-<triplet>-release.cmake.log (VCPKG_BUILD_TYPE="release")
+        foreach(_wrapper_name
+            "cmake-vars-${TARGET_TRIPLET}.cmake.log"
+            "cmake-vars-${TARGET_TRIPLET}-release.cmake.log"
+        )
+            set(_wrapper "${CURRENT_BUILDTREES_DIR}/${_wrapper_name}")
+            # Use absolute path in include to avoid CMAKE_CURRENT_LIST_DIR scope issues
+            file(WRITE "${_wrapper}" "include(\"${_dst_rel}\")\n")
         endforeach()
+
+        # Pre-set both cache variables so z_vcpkg_get_cmake_vars skips regeneration
+        set(Z_VCPKG_GET_CMAKE_VARS_FILE
+            "${CURRENT_BUILDTREES_DIR}/cmake-vars-${TARGET_TRIPLET}.cmake.log"
+            CACHE PATH "Pre-fixed cmake vars (LuaJIT)" FORCE)
+        set(Z_VCPKG_GET_CMAKE_VARS_FILE_release
+            "${CURRENT_BUILDTREES_DIR}/cmake-vars-${TARGET_TRIPLET}-release.cmake.log"
+            CACHE PATH "Pre-fixed cmake vars release (LuaJIT)" FORCE)
     endif()
 endif()
 
@@ -112,6 +189,7 @@ else()
     file(COPY "${CMAKE_CURRENT_LIST_DIR}/configure" DESTINATION "${SOURCE_PATH}")
     vcpkg_configure_make(SOURCE_PATH "${SOURCE_PATH}"
         COPY_SOURCE
+        NO_DEBUG
         OPTIONS
             "BUILDMODE=${VCPKG_LIBRARY_LINKAGE}"
             ${options}

@@ -24,11 +24,15 @@ if ("cxx17" IN_LIST FEATURES)
     set(ABSL_USE_CXX17_OPTION "-DCMAKE_CXX_STANDARD=17")
 endif ()
 
+# Force release-only build even if VCPKG_BUILD_TYPE is unset in function scope.
+set(VCPKG_BUILD_TYPE release)
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     DISABLE_PARALLEL_CONFIGURE
     OPTIONS
         -DABSL_PROPAGATE_CXX_STD=ON
+        -DCMAKE_CXX_STANDARD=17
         ${ABSL_USE_CXX17_OPTION}
 )
 
