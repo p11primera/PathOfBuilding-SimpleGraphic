@@ -27,10 +27,15 @@
 
 // ── User data path ───────────────────────────────────────────────────────────
 
-// Returns the macOS user data directory:
-//   ~/Library/Application Support/Path of Building (PoE2)
+// Returns the macOS Application Support base directory:
+//   ~/Library/Application Support
 //
-// The caller-supplied buffer is filled with a NUL-terminated UTF-8 path.
+// This mirrors the Windows behaviour where FindUserPath returns the Documents
+// folder. The Lua caller (Modules/Main.lua) appends the application-specific
+// subdirectory name ("Path of Building (PoE2)") on top of the returned base.
+//
+// The caller-supplied buffer is filled with a NUL-terminated UTF-8 path
+// without a trailing slash.
 // Returns true on success; false if the buffer is too small or the OS call
 // fails.
 //
@@ -45,23 +50,7 @@ extern "C" bool SysMac_FindUserPath(char* buf, size_t bufSize)
     if (!appSupport)
         return false;
 
-    NSString* appDir = [appSupport
-        stringByAppendingPathComponent:@"Path of Building (PoE2)"];
-
-    // Create the directory if it does not yet exist
-    NSError* err = nil;
-    [[NSFileManager defaultManager]
-        createDirectoryAtPath:appDir
-     withIntermediateDirectories:YES
-                    attributes:nil
-                         error:&err];
-    if (err) {
-        NSLog(@"SysMac_FindUserPath: cannot create directory %@: %@",
-              appDir, err.localizedDescription);
-        return false;
-    }
-
-    const char* utf8 = appDir.UTF8String;
+    const char* utf8 = appSupport.UTF8String;
     if (std::strlen(utf8) >= bufSize)
         return false;
 
