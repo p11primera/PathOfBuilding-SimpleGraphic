@@ -20,6 +20,9 @@
 #include <limits.h>
 #elif __APPLE__ && __MACH__
 #include <libproc.h>
+// Forward declarations for macOS Objective-C++ helpers in engine/system/mac/sys_main.mm
+extern "C" bool SysMac_FindUserPath(char* buf, size_t bufSize);
+extern "C" void SysMac_SpawnProcess(const char* cmdName, const char* argList);
 #endif
 
 #ifndef _WIN32
@@ -428,6 +431,8 @@ void sys_main_c::SpawnProcess(std::filesystem::path cmdName, const char* argList
 		ShellExecuteExW(&sinfo);
 	}
 	FreeWideString(wideArgs);
+#elif __APPLE__ && __MACH__
+	SysMac_SpawnProcess(cmdName.string().c_str(), argList);
 #else
 #warning LV: Subprocesses not implemented on this OS.
 	// TODO(LV): Implement subprocesses for other OSes.
@@ -593,6 +598,13 @@ std::tuple<std::optional<std::filesystem::path>, std::optional<std::string>> Fin
 	CoTaskMemFree(osPath);
 	std::filesystem::path path(pathStr);
 	return { weakly_canonical(path), {} };
+#elif __APPLE__ && __MACH__
+	// Use Foundation to resolve ~/Library/Application Support/Path of Building (PoE2)
+	char pathBuf[PATH_MAX];
+	if (SysMac_FindUserPath(pathBuf, sizeof(pathBuf))) {
+		return { std::filesystem::path(pathBuf), {} };
+	}
+	return { {}, "Could not determine macOS Application Support path" };
 #else
 	if (char const* data_home_path = getenv("XDG_DATA_HOME")) {
 		return { data_home_path, {} };
