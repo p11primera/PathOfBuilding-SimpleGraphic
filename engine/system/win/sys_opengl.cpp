@@ -2,7 +2,13 @@
 // (c) David Gowor, 2014
 //
 // Module: System OpenGL
-// Platform: Windows
+// Platform: Windows / macOS / Linux
+//
+// macOS notes:
+//   • ANGLE is linked directly (libEGL.dylib / libGLESv2.dylib) — no dlopen.
+//   • The Metal backend is selected before glfwInit() via
+//     GLFW_ANGLE_PLATFORM_TYPE_METAL in sys_video.cpp; no changes are needed here.
+//   • glfwGetProcAddress resolves ANGLE entry points on all platforms.
 //
 
 #include "sys_local.h"
