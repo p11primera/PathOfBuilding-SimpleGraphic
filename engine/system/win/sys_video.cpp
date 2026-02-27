@@ -483,7 +483,8 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		if (!wnd) {
 			char const* errDesc = "Unknown error";
 			glfwGetError(&errDesc);
-			sys->con->Printf("Could not create window, %s\n", errDesc);
+			sys->Error("Could not create window: %s", errDesc);
+			return -1;
 		}
 
 		glfwMakeContextCurrent(wnd);

@@ -722,7 +722,7 @@ bool sys_main_c::Run(int argc, char** argv)
 	}
 #else
 	catch (std::exception& e) {
-		Error("Exception: ", e.what());
+		Error("Exception: %s", e.what());
 	}
 #endif
 
