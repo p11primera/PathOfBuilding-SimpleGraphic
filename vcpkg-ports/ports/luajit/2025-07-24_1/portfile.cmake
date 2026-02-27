@@ -19,6 +19,40 @@ vcpkg_from_github(
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
 
+# On macOS, cmake-get-vars captures an empty CMAKE_OSX_SYSROOT even when the
+# SDK is found implicitly.  This leaves a bare "-isysroot " in the detected
+# C/CXX flags, which breaks make-based builds (string.h not found).
+# Fix: ask xcrun for the real SDK path and rewrite the flags.
+if(VCPKG_TARGET_IS_OSX)
+    execute_process(
+        COMMAND xcrun --show-sdk-path
+        OUTPUT_VARIABLE _osx_sdk
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(_osx_sdk)
+        # Replace "-isysroot <nothing-up-to-next-flag>" with the real value.
+        foreach(_var
+            VCPKG_DETECTED_CMAKE_C_FLAGS       VCPKG_DETECTED_CMAKE_C_FLAGS_RELEASE
+            VCPKG_DETECTED_CMAKE_C_FLAGS_DEBUG
+            VCPKG_DETECTED_CMAKE_CXX_FLAGS     VCPKG_DETECTED_CMAKE_CXX_FLAGS_RELEASE
+            VCPKG_DETECTED_CMAKE_CXX_FLAGS_DEBUG
+            VCPKG_DETECTED_RAW_CMAKE_C_FLAGS   VCPKG_DETECTED_RAW_CMAKE_CXX_FLAGS
+            VCPKG_DETECTED_CMAKE_SHARED_LINKER_FLAGS
+            VCPKG_DETECTED_CMAKE_SHARED_LINKER_FLAGS_DEBUG
+            VCPKG_DETECTED_CMAKE_SHARED_LINKER_FLAGS_RELEASE
+            VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS
+            VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS_DEBUG
+            VCPKG_DETECTED_CMAKE_EXE_LINKER_FLAGS_RELEASE
+        )
+            if(DEFINED ${_var})
+                string(REGEX REPLACE "-isysroot +([^ ]*)" "-isysroot ${_osx_sdk}" ${_var} "${${_var}}")
+                string(REGEX REPLACE "-isysroot$" "-isysroot ${_osx_sdk}" ${_var} "${${_var}}")
+            endif()
+        endforeach()
+    endif()
+endif()
+
+
 if(VCPKG_DETECTED_MSVC)
     # Due to lack of better MSVC cross-build support, just always build the host
     # minilua tool with the target toolchain. This will work for native builds and

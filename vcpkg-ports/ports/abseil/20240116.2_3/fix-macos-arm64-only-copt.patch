@@ -1,0 +1,15 @@
+--- a/absl/copts/AbseilConfigureCopts.cmake
++++ b/absl/copts/AbseilConfigureCopts.cmake
+@@ -39,6 +39,12 @@
+   # the compiler to dispatch arch-specific arguments to a designated backend.
+   set(ABSL_RANDOM_RANDEN_COPTS "")
+   foreach(_arch IN ITEMS "x86_64" "arm64")
++    # On arm64-only macOS builds (macOS 26 / darwin25+), Apple clang rejects
++    # -msse4.1 even via -Xarch_x86_64. Skip any arch absent from
++    # CMAKE_OSX_ARCHITECTURES so we only emit flags for the actual target arch.
++    if(CMAKE_OSX_ARCHITECTURES AND NOT _arch IN_LIST CMAKE_OSX_ARCHITECTURES)
++      continue()
++    endif()
+     string(TOUPPER "${_arch}" _arch_uppercase)
+     string(REPLACE "X86_64" "X64" _arch_uppercase ${_arch_uppercase})
+     foreach(_flag IN LISTS ABSL_RANDOM_HWAES_${_arch_uppercase}_FLAGS)
