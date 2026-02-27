@@ -76,20 +76,23 @@ set(SIMPLEGRAPHIC_SOURCES
     "ui_subscript.h"
 )
 
-set (SIMPLEGRAPHIC_PLATFORM_SOURCES)
-if (APPLE)
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
-        "engine/system/win/sys_macos.mm"
-    )
-endif()
-
+# Platform-specific sources — single if/elseif/else to avoid the earlier Apple
+# block being silently overwritten by the WIN32/else block.
 if (WIN32)
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    set(SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console.cpp"
         "SimpleGraphic.rc"
     )
+elseif (APPLE)
+    set(SIMPLEGRAPHIC_PLATFORM_SOURCES
+        # Shared macOS helper (PlatformOpenURL via LSOpenCFURLRef)
+        "engine/system/win/sys_macos.mm"
+        # macOS-specific implementations added in feature/macos-port
+        "engine/system/mac/sys_console.cpp"
+        "engine/system/mac/sys_main.mm"
+    )
 else()
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    set(SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console_unix.cpp"
     )
 endif()
@@ -215,12 +218,20 @@ if (WIN32)
 endif ()
 
 if (APPLE)
-    find_library(CORE_FOUNDATION_LIBRARY CoreFoundation)
-    find_library(APPLICATION_SERVICES_LIBRARY ApplicationServices)
+    find_library(CORE_FOUNDATION_LIBRARY CoreFoundation REQUIRED)
+    find_library(APPLICATION_SERVICES_LIBRARY ApplicationServices REQUIRED)
+    find_library(APPKIT_LIBRARY AppKit REQUIRED)
+    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+    find_library(METAL_LIBRARY Metal REQUIRED)
+    find_library(QUARTZCORE_LIBRARY QuartzCore REQUIRED)
     target_link_libraries(SimpleGraphic
         PRIVATE
         ${CORE_FOUNDATION_LIBRARY}
         ${APPLICATION_SERVICES_LIBRARY}
+        ${APPKIT_LIBRARY}       # NSTask / NSAlert in sys_main.mm
+        ${FOUNDATION_LIBRARY}   # NSFileManager, NSURL, etc.
+        ${METAL_LIBRARY}        # Required by ANGLE Metal backend
+        ${QUARTZCORE_LIBRARY}   # Required by ANGLE Metal backend
     )
 endif ()
 
@@ -246,6 +257,34 @@ target_link_libraries(SimpleGraphic
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
 install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
+
+# ── macOS launcher executable ────────────────────────────────────────────────
+# Builds a standalone Mach-O binary (Contents/MacOS/Path of Building-PoE2)
+# that links SimpleGraphic.dylib and calls RunLuaFileAsWin.
+if (APPLE)
+    add_executable(PathOfBuilding
+        "mac/entry.cpp"
+    )
+    target_include_directories(PathOfBuilding
+        PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/engine"
+    )
+    target_link_libraries(PathOfBuilding
+        PRIVATE
+        SimpleGraphic
+    )
+    set_target_properties(PathOfBuilding PROPERTIES
+        OUTPUT_NAME "Path of Building-PoE2"
+    )
+    # Ad-hoc code signing — works without an Apple Developer account
+    add_custom_command(TARGET PathOfBuilding POST_BUILD
+        COMMAND codesign --force --sign - $<TARGET_FILE:PathOfBuilding>
+        COMMENT "Ad-hoc code signing: Path of Building-PoE2"
+    )
+    install(TARGETS PathOfBuilding RUNTIME DESTINATION "MacOS")
+endif ()
+# ─────────────────────────────────────────────────────────────────────────────
 
 if (WIN32)
     set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
@@ -321,6 +360,13 @@ install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
 
 # luasocket module
 
+if (WIN32)
+    set(LUASOCKET_PLATFORM_SOURCES "libs/luasocket/src/wsocket.c")
+else()
+    # usocket.c provides the POSIX socket back-end for macOS and Linux
+    set(LUASOCKET_PLATFORM_SOURCES "libs/luasocket/src/usocket.c")
+endif()
+
 add_library(luasocket SHARED
    "libs/luasocket/src/auxiliar.c"
    "libs/luasocket/src/buffer.c"
@@ -334,7 +380,7 @@ add_library(luasocket SHARED
    "libs/luasocket/src/tcp.c"
    "libs/luasocket/src/timeout.c"
    "libs/luasocket/src/udp.c"
-   "libs/luasocket/src/wsocket.c"
+   ${LUASOCKET_PLATFORM_SOURCES}
 )
 
 target_include_directories(luasocket
@@ -345,9 +391,10 @@ target_include_directories(luasocket
 target_link_libraries(luasocket
     PRIVATE
     LuaJIT::LuaJIT
-    wsock32
-    ws2_32
 )
+if (WIN32)
+    target_link_libraries(luasocket PRIVATE wsock32 ws2_32)
+endif ()
 
 set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
 install(TARGETS luasocket RUNTIME DESTINATION ".")
