@@ -102,7 +102,14 @@ file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/share/man"
 )
 
-vcpkg_copy_tools(TOOL_NAMES luajit AUTO_CLEAN)
+# On macOS the LuaJIT Makefile creates a circular bin/luajit -> luajit symlink
+# when INSTALL_TNAME == LUAJIT_T (both "luajit"). Remove the broken bin/ entry;
+# PoB only needs libluajit-5.1.a + headers, not the CLI binary.
+if(VCPKG_TARGET_IS_OSX)
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/bin")
+else()
+    vcpkg_copy_tools(TOOL_NAMES luajit AUTO_CLEAN)
+endif()
 
 vcpkg_fixup_pkgconfig()
 
