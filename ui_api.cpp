@@ -2119,15 +2119,33 @@ int ui_main_c::InitAPI(lua_State* L)
 	sol::state_view lua(L);
 	luaL_openlibs(L);
 
-	// Add "lua/" subdir for non-JIT Lua
+	// Extend package.path so require() finds modules in the "lua/" subdir.
+	// On Windows, LuaJIT's LUA_PATH_DEFAULT already includes "!\lua\?.lua"
+	// where "!" expands to the exe directory.  On macOS/Linux setprogdir()
+	// is a no-op, so we must add the absolute runtime path ourselves.
+	//
+	// PoB2 layout: src/Launch.lua + runtime/lua/xml.lua  (sibling dirs)
+	// Windows layout: <exe>/lua/xml.lua  (lua/ next to exe)
+	// App bundle: Contents/Resources/src/Launch.lua + Contents/Resources/runtime/lua/xml.lua
 	{
+		ui_main_c* ui = GetUIPtr(L);
 		lua_getglobal(L, "package");
-		char const* tn = lua_typename(L, -1);
 		lua_getfield(L, -1, "path");
-		std::string old_path = lua_tostring(L, -1);
+		std::string cur = lua_tostring(L, -1);
 		lua_pop(L, 1);
-		old_path += ";lua/?.lua";
-		lua_pushstring(L, old_path.c_str());
+
+		// Absolute: <script_dir>/../runtime/lua/?.lua  (PoB2 repo & app bundle layout)
+		auto runtimeLuaDir = (ui->scriptPath.parent_path() / "runtime" / "lua" / "?.lua").generic_u8string();
+		cur += ";" + runtimeLuaDir;
+
+		// Absolute: <exe_dir>/lua/?.lua  (mirrors Windows "!" expansion)
+		auto absLuaDir = (ui->sys->basePath / "lua" / "?.lua").generic_u8string();
+		cur += ";" + absLuaDir;
+
+		// Relative: lua/?.lua  (works when CWD == exe dir)
+		cur += ";lua/?.lua";
+
+		lua_pushstring(L, cur.c_str());
 		lua_setfield(L, -2, "path");
 		lua_pop(L, 1);
 	}
@@ -2210,7 +2228,11 @@ int ui_main_c::InitAPI(lua_State* L)
 	// Rendering
 	ADDFUNC(RenderInit);
 	ADDFUNC(GetScreenSize);
+	// PoB2 Lua scripts use the newer name "GetVirtualScreenSize".
+	lua_pushcclosure(L, l_GetScreenSize, 0); lua_setglobal(L, "GetVirtualScreenSize");
 	ADDFUNC(GetScreenScale);
+	// PoB2 Lua scripts use the newer name "GetVirtualScreenScale".
+	lua_pushcclosure(L, l_GetScreenScale, 0); lua_setglobal(L, "GetVirtualScreenScale");
 	ADDFUNC(SetClearColor);
 	ADDFUNC(SetDrawLayer);
 	ADDFUNC(GetDrawLayer);
