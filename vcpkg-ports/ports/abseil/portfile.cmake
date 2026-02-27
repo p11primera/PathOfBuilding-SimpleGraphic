@@ -9,14 +9,10 @@ vcpkg_from_github(
     SHA512 5062e731ee8c9a757e6d75fc1c558652deb4dd1daab4d6143f7ad52a139501c61365f89acbf82480be0f9a4911a58286560068d8b1a8b6774e6afad51739766e
     HEAD_REF master
     PATCHES
-        0001-revert-integer-to-string-conversion-optimizations.patch
-        0002-Fix-missing-include-random-for-std-uniform_int_distr.patch
+        0001-revert-integer-to-string-conversion-optimizations.patch # Fix openvino MSVC compile error
+		0002-Fix-missing-include-random-for-std-uniform_int_distr.patch # Fix missing include for std::uniform_int_distribution
         779a356-test-allocator.diff
-        fix-macos-arm64-only-copt.patch
-)
-
-# With ABSL_PROPAGATE_CXX_STD=ON abseil automatically detects if it is being
-# compiled with C++14 or C++17, and modifies the installed `absl/base/options.h`
+        fix-macos-arm64-only-copt.patch # Skip x86_64 -Xarch_/-msse4.1 on arm64-only macOS 26+ builds
 # header accordingly. This works even if CMAKE_CXX_STANDARD is not set. Abseil
 # uses the compiler default behavior to update `absl/base/options.h` as needed.
 set(ABSL_USE_CXX17_OPTION "")
@@ -24,15 +20,11 @@ if ("cxx17" IN_LIST FEATURES)
     set(ABSL_USE_CXX17_OPTION "-DCMAKE_CXX_STANDARD=17")
 endif ()
 
-# Force release-only build even if VCPKG_BUILD_TYPE is unset in function scope.
-set(VCPKG_BUILD_TYPE release)
-
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     DISABLE_PARALLEL_CONFIGURE
     OPTIONS
         -DABSL_PROPAGATE_CXX_STD=ON
-        -DCMAKE_CXX_STANDARD=17
         ${ABSL_USE_CXX17_OPTION}
 )
 
