@@ -2,6 +2,12 @@ set(VCPKG_TARGET_ARCHITECTURE arm64)
 set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
 
+# ANGLE must be shared: GLFW calls dlopen("libEGL.dylib") at runtime to
+# initialise EGL.  A statically-linked ANGLE gives no file for GLFW to open.
+if(PORT MATCHES "angle")
+    set(VCPKG_LIBRARY_LINKAGE dynamic)
+endif()
+
 set(VCPKG_CMAKE_SYSTEM_NAME Darwin)
 set(VCPKG_OSX_ARCHITECTURES arm64)
 

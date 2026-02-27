@@ -255,11 +255,67 @@ target_link_libraries(SimpleGraphic
     $<IF:$<TARGET_EXISTS:zstd::libzstd_shared>,zstd::libzstd_shared,zstd::libzstd_static>
 )
 
+# libSimpleGraphic needs @loader_path RPATH so that GLFW's
+# dlopen("libEGL.dylib") finds the ANGLE dylibs sitting next to it.
+if (APPLE)
+    set_target_properties(SimpleGraphic PROPERTIES
+        BUILD_RPATH "@loader_path"
+        INSTALL_RPATH "@loader_path"
+    )
+endif ()
+
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
 install(TARGETS SimpleGraphic
     RUNTIME DESTINATION "."
     LIBRARY DESTINATION $<IF:$<BOOL:${APPLE}>,Frameworks,.>
 )
+
+# Install ANGLE shared libraries alongside SimpleGraphic (macOS only).
+# GLFW calls dlopen("libEGL.dylib") at runtime; the dylib must be in
+# the same directory as libSimpleGraphic.dylib so @loader_path finds it.
+# The vcpkg angle port names them "liblibEGL_angle.dylib" (double prefix);
+# we create symlinks with the names GLFW expects.
+if (APPLE)
+    set(_angle_lib_dir "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
+    message(STATUS "ANGLE lib dir: ${_angle_lib_dir}")
+    file(GLOB _angle_dylibs
+        "${_angle_lib_dir}/lib*EGL*.dylib"
+        "${_angle_lib_dir}/lib*GLESv2*.dylib")
+    message(STATUS "ANGLE dylibs found: ${_angle_dylibs}")
+    if (_angle_dylibs)
+        install(FILES ${_angle_dylibs} DESTINATION Frameworks)
+    endif ()
+
+    # Create symlinks in the build directory so GLFW can find them at dev time.
+    # Also create them at install time.
+    # GLFW dlopen's "libEGL.dylib"; vcpkg produces "liblibEGL_angle.dylib".
+    set(_angle_egl "${_angle_lib_dir}/liblibEGL_angle.dylib")
+    set(_angle_gles "${_angle_lib_dir}/liblibGLESv2_angle.dylib")
+    if (EXISTS "${_angle_egl}" AND EXISTS "${_angle_gles}")
+        message(STATUS "ANGLE: will create symlinks for GLFW dlopen")
+        add_custom_command(TARGET SimpleGraphic POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${_angle_egl}" "$<TARGET_FILE_DIR:SimpleGraphic>/liblibEGL_angle.dylib"
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "liblibEGL_angle.dylib" "$<TARGET_FILE_DIR:SimpleGraphic>/libEGL.dylib"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${_angle_gles}" "$<TARGET_FILE_DIR:SimpleGraphic>/liblibGLESv2_angle.dylib"
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "liblibGLESv2_angle.dylib" "$<TARGET_FILE_DIR:SimpleGraphic>/libGLESv2.dylib"
+            COMMENT "Copying ANGLE dylibs and creating symlinks for GLFW"
+        )
+        install(CODE "
+            execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
+                \"liblibEGL_angle.dylib\"
+                \"\${CMAKE_INSTALL_PREFIX}/Frameworks/libEGL.dylib\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
+                \"liblibGLESv2_angle.dylib\"
+                \"\${CMAKE_INSTALL_PREFIX}/Frameworks/libGLESv2.dylib\")
+        ")
+    else ()
+        message(WARNING "ANGLE shared libraries not found — GLFW EGL init will fail")
+    endif ()
+endif ()
 
 # ── macOS launcher executable ────────────────────────────────────────────────
 # Builds a standalone Mach-O binary (Contents/MacOS/Path of Building-PoE2)
@@ -279,6 +335,8 @@ if (APPLE)
     )
     set_target_properties(PathOfBuilding PROPERTIES
         OUTPUT_NAME "Path of Building-PoE2"
+        BUILD_RPATH "@executable_path"
+        INSTALL_RPATH "@executable_path/../Frameworks"
     )
     # Ad-hoc code signing — works without an Apple Developer account
     add_custom_command(TARGET PathOfBuilding POST_BUILD
