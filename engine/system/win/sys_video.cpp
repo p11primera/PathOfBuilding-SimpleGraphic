@@ -8,6 +8,10 @@
 #include <glad/gles2.h>
 
 #include "sys_local.h"
+
+#ifdef __APPLE__
+#include <ApplicationServices/ApplicationServices.h>
+#endif
 #include "core.h"
 
 #include <GLFW/glfw3.h>
@@ -115,6 +119,9 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 		platformType = GLFW_ANGLE_PLATFORM_TYPE_D3D11;
 	else // Native Windows
 		platformType = GLFW_ANGLE_PLATFORM_TYPE_D3D11;
+#elif __APPLE__ && __MACH__
+	// Use ANGLE's Metal backend on Apple Silicon and Intel macOS
+	platformType = GLFW_ANGLE_PLATFORM_TYPE_METAL;
 #endif
 	glfwInitHint(GLFW_ANGLE_PLATFORM_TYPE, platformType);
 	glfwInit();
@@ -134,10 +141,15 @@ std::optional<std::pair<double, double>> PlatformGetCursorPos() {
 	POINT curPos;
 	GetCursorPos(&curPos);
 	return std::make_pair((double)curPos.x, (double)curPos.y);
+#elif __APPLE__ && __MACH__
+	// CoreGraphics global mouse position — works outside the GLFW window
+	CGEventRef event = CGEventCreate(nullptr);
+	CGPoint pos = CGEventGetLocation(event);
+	CFRelease(event);
+	return std::make_pair(pos.x, pos.y);
 #else
-	#warning LV : Global cursor position queries not implemented yet on this OS.
-		// TODO(LV): Implement on other OSes
-		return {};
+	// TODO(LV): Implement on Linux/other OSes
+	return {};
 #endif
 }
 
@@ -455,6 +467,11 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		glfwWindowHint(GLFW_RESIZABLE, !!(cur.flags & VID_RESIZABLE));
 		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // Start hidden to not flash the user with a stock window.
 		glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE); // Start restored in order to position the window before maximizing.
+#ifdef __APPLE__
+		// Enable Retina/HiDPI framebuffer on macOS so the render resolution
+		// matches the physical pixel count of the display.
+		glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
+#endif
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 		glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
