@@ -270,7 +270,10 @@ target_link_libraries(SimpleGraphic
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
-install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
+install(TARGETS SimpleGraphic
+    RUNTIME DESTINATION "."
+    LIBRARY DESTINATION $<IF:$<BOOL:${APPLE}>,Frameworks,.>
+)
 
 # ── macOS launcher executable ────────────────────────────────────────────────
 # Builds a standalone Mach-O binary (Contents/MacOS/Path of Building-PoE2)
@@ -348,7 +351,10 @@ target_link_libraries(lcurl
     LuaJIT::LuaJIT
 )
 
-install(TARGETS lcurl RUNTIME DESTINATION ".")
+install(TARGETS lcurl
+    RUNTIME DESTINATION "."
+    LIBRARY DESTINATION $<IF:$<BOOL:${APPLE}>,Frameworks,.>
+)
 install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
 # luautf8 module
@@ -375,7 +381,10 @@ target_link_libraries(lua-utf8
     LuaJIT::LuaJIT
 )
 
-install(TARGETS lua-utf8 RUNTIME DESTINATION ".")
+install(TARGETS lua-utf8
+    RUNTIME DESTINATION "."
+    LIBRARY DESTINATION $<IF:$<BOOL:${APPLE}>,Frameworks,.>
+)
 install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
 
 # luasocket module
@@ -417,7 +426,10 @@ if (WIN32)
 endif ()
 
 set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
-install(TARGETS luasocket RUNTIME DESTINATION ".")
+install(TARGETS luasocket
+    RUNTIME DESTINATION "."
+    LIBRARY DESTINATION $<IF:$<BOOL:${APPLE}>,Frameworks,.>
+)
 install(FILES $<TARGET_RUNTIME_DLLS:luasocket> DESTINATION ".")
 
 # lzip module
@@ -434,5 +446,9 @@ target_link_libraries(lzip
     ZLIB::ZLIB
 )
 
-install(TARGETS lzip RUNTIME DESTINATION ".")
+install(TARGETS lzip
+    RUNTIME DESTINATION "."
+    LIBRARY DESTINATION $<IF:$<BOOL:${APPLE}>,Frameworks,.>
+)
 install(FILES $<TARGET_RUNTIME_DLLS:lzip> DESTINATION ".")
+
