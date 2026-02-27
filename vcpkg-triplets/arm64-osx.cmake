@@ -10,9 +10,11 @@ set(VCPKG_OSX_ARCHITECTURES arm64)
 set(VCPKG_BUILD_TYPE release)
 
 # Ensure every port (including make-based ones like LuaJIT) sees the active SDK.
-# Without this, vcpkg_cmake_get_vars produces "-isysroot <empty>" which breaks
-# any Makefile port that calls <string.h> etc.
-# Use VCPKG_OSX_SYSROOT instead of VCPKG_CMAKE_CONFIGURE_OPTIONS to avoid
-# clobbering vcpkg's internal -DCMAKE_OSX_ARCHITECTURES=arm64 injection.
+# VCPKG_CMAKE_CONFIGURE_OPTIONS propagates into the cmake-get-vars probe project,
+# so the compiler flag detection picks up the correct sysroot.
 execute_process(COMMAND xcrun --show-sdk-path
     OUTPUT_VARIABLE VCPKG_OSX_SYSROOT OUTPUT_STRIP_TRAILING_WHITESPACE)
+list(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS
+    "-DCMAKE_OSX_ARCHITECTURES=arm64"
+    "-DCMAKE_OSX_SYSROOT=${VCPKG_OSX_SYSROOT}"
+)

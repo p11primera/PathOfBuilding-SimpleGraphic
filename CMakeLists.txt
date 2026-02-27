@@ -252,7 +252,7 @@ target_link_libraries(SimpleGraphic
     Threads::Threads
     WebP::webpdecoder
     ZLIB::ZLIB
-    zstd::libzstd_shared
+    $<IF:$<TARGET_EXISTS:zstd::libzstd_shared>,zstd::libzstd_shared,zstd::libzstd_static>
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
@@ -343,7 +343,13 @@ add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
 
 target_compile_definitions(lua-utf8
     PRIVATE
-    LUA_BUILD_AS_DLL
+    $<$<BOOL:${WIN32}>:LUA_BUILD_AS_DLL>
+)
+
+# lutf8lib.c uses INT_MAX without including <limits.h>; force-include it on non-Windows.
+target_compile_options(lua-utf8
+    PRIVATE
+    $<$<NOT:$<BOOL:${WIN32}>>:-include limits.h>
 )
 
 target_include_directories(lua-utf8

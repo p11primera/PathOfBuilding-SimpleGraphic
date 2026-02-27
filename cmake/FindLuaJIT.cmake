@@ -9,15 +9,23 @@ if (DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
 
     find_path(LuaJIT_INCLUDE_DIR luajit.h
         PATHS ${LuaJIT_SEARCH_ROOT}/include
-        PATH_SUFFIXES luajit
+        # vcpkg installs headers under luajit-2.1/ on Unix; luajit/ on Windows
+        PATH_SUFFIXES luajit-2.1 luajit
         NO_DEFAULT_PATH)
 
-    find_library(LuaJIT_LIBRARY_RELEASE NAMES lua51
+    # Windows DLL import lib is lua51; Unix static/shared lib is luajit-5.1
+    if(WIN32)
+        set(_luajit_lib_names lua51)
+    else()
+        set(_luajit_lib_names luajit-5.1)
+    endif()
+
+    find_library(LuaJIT_LIBRARY_RELEASE NAMES ${_luajit_lib_names}
         PATHS ${LuaJIT_SEARCH_ROOT}
         PATH_SUFFIXES lib
         NO_DEFAULT_PATH)
 
-    find_library(LuaJIT_LIBRARY_DEBUG NAMES lua51
+    find_library(LuaJIT_LIBRARY_DEBUG NAMES ${_luajit_lib_names}
         PATHS ${LuaJIT_SEARCH_ROOT}
         PATH_SUFFIXES debug/lib
         NO_DEFAULT_PATH)
