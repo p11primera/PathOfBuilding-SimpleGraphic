@@ -2135,18 +2135,42 @@ int ui_main_c::InitAPI(lua_State* L)
 		lua_pop(L, 1);
 
 		// Absolute: <script_dir>/../runtime/lua/?.lua  (PoB2 repo & app bundle layout)
-		auto runtimeLuaDir = (ui->scriptPath.parent_path() / "runtime" / "lua" / "?.lua").generic_u8string();
-		cur += ";" + runtimeLuaDir;
+		auto runtimeLuaBase = (ui->scriptPath.parent_path() / "runtime" / "lua").generic_u8string();
+		cur += ";" + runtimeLuaBase + "/?.lua";
+		cur += ";" + runtimeLuaBase + "/?/init.lua";
 
 		// Absolute: <exe_dir>/lua/?.lua  (mirrors Windows "!" expansion)
-		auto absLuaDir = (ui->sys->basePath / "lua" / "?.lua").generic_u8string();
-		cur += ";" + absLuaDir;
+		auto absLuaBase = (ui->sys->basePath / "lua").generic_u8string();
+		cur += ";" + absLuaBase + "/?.lua";
+		cur += ";" + absLuaBase + "/?/init.lua";
 
 		// Relative: lua/?.lua  (works when CWD == exe dir)
-		cur += ";lua/?.lua";
+		cur += ";lua/?.lua;lua/?/init.lua";
 
 		lua_pushstring(L, cur.c_str());
 		lua_setfield(L, -2, "path");
+		lua_pop(L, 1);
+	}
+
+	// Extend package.cpath so require() finds C modules (lcurl, lzip, etc.).
+	// Same setprogdir() issue as package.path — "!" does not expand on macOS.
+	{
+		ui_main_c* ui = GetUIPtr(L);
+		lua_getglobal(L, "package");
+		lua_getfield(L, -1, "cpath");
+		std::string cur = lua_tostring(L, -1);
+		lua_pop(L, 1);
+
+		// Absolute: <exe_dir>/?.so  (mirrors Windows "!\\?.dll")
+		auto absCDir = (ui->sys->basePath / "?.so").generic_u8string();
+		cur += ";" + absCDir;
+
+		// App bundle: <exe_dir>/../Frameworks/?.so
+		auto fwDir = (ui->sys->basePath / ".." / "Frameworks" / "?.so").generic_u8string();
+		cur += ";" + fwDir;
+
+		lua_pushstring(L, cur.c_str());
+		lua_setfield(L, -2, "cpath");
 		lua_pop(L, 1);
 	}
 
