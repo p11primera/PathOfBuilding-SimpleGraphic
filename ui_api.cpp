@@ -1817,7 +1817,9 @@ static int l_LaunchSubScript(lua_State* L)
 	}
 	ui->subScriptList[slot] = ui_ISubScript::GetHandle(ui, slot);
 	if (ui->subScriptList[slot]->Start(L)) {
-		lua_pushlightuserdata(L, (void*)(uintptr_t)slot);
+		// Use slot+1 so that slot 0 doesn't produce lightuserdata(NULL),
+		// which is indistinguishable from a NULL pointer in Lua table keys.
+		lua_pushlightuserdata(L, (void*)(uintptr_t)(slot + 1));
 	}
 	else {
 		lua_pushnil(L);
@@ -1831,7 +1833,7 @@ static int l_AbortSubScript(lua_State* L)
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: AbortSubScript(ssID)");
 	ui->LAssert(L, lua_islightuserdata(L, 1), "AbortSubScript() argument 1: expected subscript ID, got %s", luaL_typename(L, 1));
-	dword slot = (dword)(uintptr_t)lua_touserdata(L, 1);
+	dword slot = (dword)(uintptr_t)lua_touserdata(L, 1) - 1;
 	ui->LAssert(L, slot < ui->subScriptSize && ui->subScriptList[slot], "AbortSubScript() argument 1: invalid subscript ID");
 	ui->LAssert(L, ui->subScriptList[slot]->IsRunning(), "AbortSubScript(): subscript isn't running");
 	ui_ISubScript::FreeHandle(ui->subScriptList[slot]);
@@ -1845,7 +1847,7 @@ static int l_IsSubScriptRunning(lua_State* L)
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: IsSubScriptRunning(ssID)");
 	ui->LAssert(L, lua_islightuserdata(L, 1), "IsSubScriptRunning() argument 1: expected subscript ID, got %s", luaL_typename(L, 1));
-	dword slot = (dword)(uintptr_t)lua_touserdata(L, 1);
+	dword slot = (dword)(uintptr_t)lua_touserdata(L, 1) - 1;
 	ui->LAssert(L, slot < ui->subScriptSize && ui->subScriptList[slot], "IsSubScriptRunning() argument 1: invalid subscript ID");
 	lua_pushboolean(L, ui->subScriptList[slot]->IsRunning());
 	return 1;

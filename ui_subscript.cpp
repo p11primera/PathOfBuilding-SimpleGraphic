@@ -463,7 +463,7 @@ void ui_subscript_c::SubScriptFrame()
 		if (errorStr) {
 			int extraArgs = ui->PushCallback("OnSubError");
 			if (extraArgs >= 0) {
-				lua_pushlightuserdata(ui->L, (void*)(uintptr_t)id);
+				lua_pushlightuserdata(ui->L, (void*)(uintptr_t)(id + 1));
 				lua_pushstring(ui->L, errorStr);
 				ui->PCall(extraArgs + 2, 0);
 			}
@@ -484,7 +484,7 @@ void ui_subscript_c::SubScriptFrame()
 						break;
 					}
 				}
-				lua_pushlightuserdata(ui->L, (void*)(uintptr_t)id);
+				lua_pushlightuserdata(ui->L, (void*)(uintptr_t)(id + 1));
 				ui->PCall(extraArgs + 1 + ssPushData(ui->L, ssBuildData(L, 2)), 0);
 			}
 		}
