@@ -19,6 +19,7 @@
 #define GLFW_EXPOSE_NATIVE_COCOA
 #include <GLFW/glfw3native.h>
 extern "C" void SysMac_FixEGLLayerScale(void* nsWindowPtr);
+extern "C" void SysMac_BeginLaunch(void);
 #endif
 
 #include <deque>
@@ -671,6 +672,13 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		if (!!(cur.flags & VID_MAXIMIZE)) {
 			glfwMaximizeWindow(wnd);
 		}
+#ifdef __APPLE__
+		// Re-trigger the Dock bounce animation.  GLFW calls [NSApp finishLaunching]
+		// inside glfwInit(), ending the automatic launch bounce before the Lua VM
+		// loads.  We restart it here so the user sees feedback while the window
+		// is being prepared, and cancel it once the first black frame is swapped.
+		SysMac_BeginLaunch();
+#endif
 		glfwShowWindow(wnd);
 
 		// Clear early to avoid flash
