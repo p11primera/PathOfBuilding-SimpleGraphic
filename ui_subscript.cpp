@@ -328,6 +328,26 @@ bool ui_subscript_c::Start()
 	lua_pop(L, 1);
 	parseSubScriptList(L, lua_tostring(ui->L, 2), l_SubScriptFunc);
 	parseSubScriptList(L, lua_tostring(ui->L, 3), l_SubScriptSub);
+
+	// Copy package.path and package.cpath from the main Lua state so that
+	// sub-scripts can find Lua modules and C modules in the same locations.
+	{
+		auto copyPackageField = [&](const char* field) {
+			lua_getglobal(ui->L, "package");
+			lua_getfield(ui->L, -1, field);
+			const char* val = lua_tostring(ui->L, -1);
+			if (val) {
+				lua_getglobal(L, "package");
+				lua_pushstring(L, val);
+				lua_setfield(L, -2, field);
+				lua_pop(L, 1);
+			}
+			lua_pop(ui->L, 2);
+		};
+		copyPackageField("path");
+		copyPackageField("cpath");
+	}
+
 	lua_gc(L, LUA_GCRESTART, -1);
 
 	// Load the script
