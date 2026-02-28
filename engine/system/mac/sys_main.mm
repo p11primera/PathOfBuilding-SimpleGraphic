@@ -21,6 +21,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <QuartzCore/QuartzCore.h>
 
 #include <cstring>
 #include <cassert>
@@ -92,5 +93,46 @@ extern "C" void SysMac_SpawnProcess(const char* cmdName, const char* argList)
     if (![task launchAndReturnError:&err]) {
         NSLog(@"SysMac_SpawnProcess: failed to launch %@: %@",
               cmd, err ? err.localizedDescription : @"unknown error");
+    }
+}
+
+// ── Retina / EGL layer scale fix ─────────────────────────────────────────────
+
+// GLFW 3.4's EGL code path does not set the CALayer's contentsScale the
+// way the native NSGL and Metal/Vulkan paths do.  Without this, ANGLE's
+// EGL surface is created at 1× logical pixels on a Retina display, while
+// glfwGetFramebufferSize reports the 2× physical size.  The result is a
+// blurry, zoomed-in quarter of the UI.
+//
+// This function sets contentsScale on the view's layer tree so that
+// ANGLE's drawable matches the true physical pixel count.  We walk
+// sublayers because ANGLE may create its own CAMetalLayer beneath the
+// root layer that GLFW handed it.
+//
+// Called from sys_video.cpp right after glfwMakeContextCurrent.
+
+static void setScaleRecursive(CALayer* layer, CGFloat scale)
+{
+    [layer setContentsScale:scale];
+    for (CALayer* sub in [layer sublayers]) {
+        setScaleRecursive(sub, scale);
+    }
+}
+
+extern "C" void SysMac_FixEGLLayerScale(void* nsWindowPtr)
+{
+    if (!nsWindowPtr)
+        return;
+
+    NSWindow* window = (__bridge NSWindow*)nsWindowPtr;
+    NSView* view = [window contentView];
+    CALayer* layer = [view layer];
+    if (layer) {
+        CGFloat scale = [window backingScaleFactor];
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        setScaleRecursive(layer, scale);
+        [CATransaction commit];
+        [CATransaction flush];
     }
 }
