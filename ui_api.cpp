@@ -2154,6 +2154,9 @@ int ui_main_c::InitAPI(lua_State* L)
 
 	// Extend package.cpath so require() finds C modules (lcurl, lzip, etc.).
 	// Same setprogdir() issue as package.path — "!" does not expand on macOS.
+	// IMPORTANT: prepend (not append) so bundled arm64 modules take priority
+	// over anything in ~/.luarocks or other user paths that may contain
+	// incompatible x86_64 builds.
 	{
 		ui_main_c* ui = GetUIPtr(L);
 		lua_getglobal(L, "package");
@@ -2161,13 +2164,12 @@ int ui_main_c::InitAPI(lua_State* L)
 		std::string cur = lua_tostring(L, -1);
 		lua_pop(L, 1);
 
-		// Absolute: <exe_dir>/?.so  (mirrors Windows "!\\?.dll")
-		auto absCDir = (ui->sys->basePath / "?.so").generic_u8string();
-		cur += ";" + absCDir;
-
-		// App bundle: <exe_dir>/../Frameworks/?.so
+		// App bundle: <exe_dir>/../Frameworks/?.so  (highest priority)
 		auto fwDir = (ui->sys->basePath / ".." / "Frameworks" / "?.so").generic_u8string();
-		cur += ";" + fwDir;
+		// Absolute: <exe_dir>/?.so  (fallback for non-bundle layouts)
+		auto absCDir = (ui->sys->basePath / "?.so").generic_u8string();
+
+		cur = fwDir + ";" + absCDir + ";" + cur;
 
 		lua_pushstring(L, cur.c_str());
 		lua_setfield(L, -2, "cpath");
