@@ -20,6 +20,7 @@
 #include <limits.h>
 #elif __APPLE__ && __MACH__
 #include <libproc.h>
+#include <sys/sysctl.h>
 // Forward declarations for macOS Objective-C++ helpers in engine/system/mac/sys_main.mm
 extern "C" bool SysMac_FindUserPath(char* buf, size_t bufSize);
 extern "C" void SysMac_SpawnProcess(const char* cmdName, const char* argList);
@@ -636,7 +637,23 @@ sys_main_c::sys_main_c()
 #else
 	debuggerRunning = false;
 #endif
+
+#if defined(__APPLE__) && defined(__MACH__)
+	// On Apple Silicon, prefer performance (P) core count for CPU-intensive
+	// workloads.  hw.perflevel0.logicalcpu returns P-core logical CPUs;
+	// it is only available on ARM Macs with asymmetric core layouts.
+	{
+		int pCores = 0;
+		size_t sz = sizeof(pCores);
+		if (sysctlbyname("hw.perflevel0.logicalcpu", &pCores, &sz, nullptr, 0) == 0 && pCores > 0) {
+			processorCount = pCores;
+		} else {
+			processorCount = std::thread::hardware_concurrency();
+		}
+	}
+#else
 	processorCount = std::thread::hardware_concurrency();
+#endif
 
 	// Set the local system information
 	basePath = FindBasePath();

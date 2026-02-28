@@ -1649,6 +1649,13 @@ static int l_GetTime(lua_State* L)
 	return 1;
 }
 
+static int l_GetProcessorCount(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	lua_pushinteger(L, ui->sys->processorCount);
+	return 1;
+}
+
 static int l_GetScriptPath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -2315,6 +2322,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(Deflate);
 	ADDFUNC(Inflate);
 	ADDFUNC(GetTime);
+	ADDFUNC(GetProcessorCount);
 	ADDFUNC(GetScriptPath);
 	ADDFUNC(GetRuntimePath);
 	ADDFUNC(GetUserPath);
