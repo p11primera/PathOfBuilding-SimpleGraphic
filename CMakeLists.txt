@@ -469,7 +469,7 @@ if (WIN32)
     target_link_libraries(luasocket PRIVATE wsock32 ws2_32)
 endif ()
 
-set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
+set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" )
 install(TARGETS luasocket
     RUNTIME DESTINATION "."
     LIBRARY DESTINATION $<IF:$<BOOL:${APPLE}>,Frameworks,.>
@@ -495,4 +495,14 @@ install(TARGETS lzip
     LIBRARY DESTINATION $<IF:$<BOOL:${APPLE}>,Frameworks,.>
 )
 install(FILES $<TARGET_RUNTIME_DLLS:lzip> DESTINATION ".")
+
+# Lua C modules must be named <module>.so (no lib prefix) so LuaJIT's
+# default package.cpath can find them on macOS.  Without this, CMake
+# produces lib<module>.dylib which does not match ?.so patterns.
+if (APPLE)
+    set_target_properties(lcurl lzip lua-utf8 luasocket PROPERTIES
+        PREFIX ""
+        SUFFIX ".so"
+    )
+endif ()
 
