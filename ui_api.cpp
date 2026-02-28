@@ -1698,6 +1698,12 @@ static int l_GetUserPath(lua_State* L)
 		return 2;
 	}
 
+	// macOS note: SysMac_FindUserPath returns ~/Library/Application Support
+	// (without the app-specific subdirectory).  Modules/Main.lua appends
+	// "Path of Building (PoE2)" on top of this base path — the same pattern
+	// used on Windows where GetUserPath returns the Documents folder.
+	// If you change the return value here, update FindUserPath in
+	// engine/system/mac/sys_main.mm and Modules/Main.lua in lockstep.
 	lua_pushstring(L, userPath->generic_u8string().c_str());
 	try
 	{
