@@ -15,6 +15,10 @@
 
 #include <GLFW/glfw3.h>
 
+#ifdef __APPLE__
+extern "C" void SysMac_EndLaunch(void);
+#endif
+
 // =====================
 // sys_IOpenGL Interface
 // =====================
@@ -32,6 +36,9 @@ public:
 	sys_openGL_c(sys_IMain* sysHnd);
 
 	sys_main_c* sys;
+#ifdef __APPLE__
+	bool firstFrameDone = false;
+#endif
 };
 
 sys_IOpenGL* sys_IOpenGL::GetHandle(sys_IMain* sysHnd)
@@ -69,6 +76,15 @@ bool sys_openGL_c::Shutdown()
 void sys_openGL_c::Swap()
 {
 	glfwSwapBuffers((GLFWwindow*)sys->video->GetWindowHandle());
+#ifdef __APPLE__
+	// Cancel the Dock bounce on the first real rendered frame.
+	// SysMac_BeginLaunch() was called during window creation so the icon
+	// bounces throughout the Lua VM / asset loading phase.
+	if (!firstFrameDone) {
+		firstFrameDone = true;
+		SysMac_EndLaunch();
+	}
+#endif
 }
 
 void* sys_openGL_c::GetProc(const char* name)

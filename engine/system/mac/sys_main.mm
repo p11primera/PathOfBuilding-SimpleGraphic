@@ -22,6 +22,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>
+#import <QuartzCore/CAMetalLayer.h>
 
 #include <cstring>
 #include <cassert>
@@ -98,24 +99,36 @@ extern "C" void SysMac_SpawnProcess(const char* cmdName, const char* argList)
 
 // ── Retina / EGL layer scale fix ─────────────────────────────────────────────
 
-// GLFW 3.4's EGL code path does not set the CALayer's contentsScale the
-// way the native NSGL and Metal/Vulkan paths do.  Without this, ANGLE's
-// EGL surface is created at 1× logical pixels on a Retina display, while
-// glfwGetFramebufferSize reports the 2× physical size.  The result is a
-// blurry, zoomed-in quarter of the UI.
+// GLFW 3.4's EGL code path does not configure ANGLE's CAMetalLayer for
+// Retina displays.  ANGLE sets CAMetalLayer.drawableSize from the view's
+// bounds in *points* (logical pixels), so on a 2× Retina display the EGL
+// surface ends up at half the physical resolution in each dimension, giving
+// ANGLE a 1× drawable while glfwGetFramebufferSize reports the full 2×
+// framebuffer.  The renderer then sizes its RTT and viewport to the 2×
+// fbSize, but the actual EGL surface is only 1×, so only the top-left
+// quarter of the rendered image is visible — appearing enlarged and blurry.
+// Resizing the window works around this because Cocoa sends a
+// frameDidChange notification that causes ANGLE to recalculate drawableSize.
 //
-// This function sets contentsScale on the view's layer tree so that
-// ANGLE's drawable matches the true physical pixel count.  We walk
-// sublayers because ANGLE may create its own CAMetalLayer beneath the
-// root layer that GLFW handed it.
+// The fix: walk the CALayer tree and for every CAMetalLayer found (ANGLE
+// creates one beneath the view's root layer), explicitly set both
+// contentsScale and drawableSize to the physical pixel dimensions.  Both
+// fields must be updated: contentsScale alone does not update drawableSize.
 //
-// Called from sys_video.cpp right after glfwMakeContextCurrent.
+// Called from sys_video.cpp after glfwShowWindow + glfwPollEvents so that
+// ANGLE has already created and attached its CAMetalLayer.
 
-static void setScaleRecursive(CALayer* layer, CGFloat scale)
+static void fixLayerRecursive(CALayer* layer, CGFloat scale, CGSize viewBoundsSize)
 {
-    [layer setContentsScale:scale];
+    layer.contentsScale = scale;
+    if ([layer isKindOfClass:[CAMetalLayer class]]) {
+        CAMetalLayer* metalLayer = (CAMetalLayer*)layer;
+        metalLayer.drawableSize = CGSizeMake(
+            viewBoundsSize.width  * scale,
+            viewBoundsSize.height * scale);
+    }
     for (CALayer* sub in [layer sublayers]) {
-        setScaleRecursive(sub, scale);
+        fixLayerRecursive(sub, scale, viewBoundsSize);
     }
 }
 
@@ -129,11 +142,38 @@ extern "C" void SysMac_FixEGLLayerScale(void* nsWindowPtr)
     CALayer* layer = [view layer];
     if (layer) {
         CGFloat scale = [window backingScaleFactor];
+        CGSize viewSize = view.bounds.size;
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
-        setScaleRecursive(layer, scale);
+        fixLayerRecursive(layer, scale, viewSize);
         [CATransaction commit];
-        // Note: [CATransaction flush] is not needed here — setDisableActions:YES
-        // causes commit to apply changes synchronously without animation.
+        // flush pushes layer tree changes to the Core Animation render server
+        // immediately, before the next display pass.  Without it, changes are
+        // deferred and ANGLE reads stale geometry when allocating its EGL
+        // surface, reproducing the 1x quarter-render on initial load.
+        [CATransaction flush];
     }
+}
+
+// ── Dock launch progress indicator ───────────────────────────────────────────
+//
+// GLFW calls [NSApp finishLaunching] inside glfwInit(), which ends the
+// automatic Dock bounce before the Lua VM has loaded any content.
+// [NSApp requestUserAttention:] is a no-op when the app is already the
+// active/frontmost application (always the case on double-click launch).
+// NSDockTile.contentView + NSProgressIndicator requires the main run loop to
+// be spinning to animate — which it isn't during synchronous Lua loading.
+//
+// Reliable solution: dockTile.badgeLabel.  This is pure IPC to the Dock
+// process and works from any thread and any run-loop state.  An ellipsis
+// badge on the icon gives clear "loading" feedback at zero complexity.
+
+extern "C" void SysMac_BeginLaunch(void)
+{
+    [NSApp dockTile].badgeLabel = @"…";
+}
+
+extern "C" void SysMac_EndLaunch(void)
+{
+    [NSApp dockTile].badgeLabel = nil;
 }
