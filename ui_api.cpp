@@ -1816,7 +1816,7 @@ static int l_LaunchSubScript(lua_State* L)
 		}
 	}
 	ui->subScriptList[slot] = ui_ISubScript::GetHandle(ui, slot);
-	if (ui->subScriptList[slot]->Start()) {
+	if (ui->subScriptList[slot]->Start(L)) {
 		lua_pushlightuserdata(L, (void*)(uintptr_t)slot);
 	}
 	else {

@@ -38,7 +38,7 @@ struct ssCall_s {
 class ui_subscript_c: public ui_ISubScript, public thread_c {
 public:
 	// Interface
-	bool	Start();
+	bool	Start(lua_State* callerL);
 	void	SubScriptFrame();
 	bool	IsRunning();
 	size_t	GetScriptMemory();
@@ -299,7 +299,7 @@ static void l_hookStop(lua_State* L, lua_Debug* dbg)
 // UI Sub Script Class
 // ===================
 
-bool ui_subscript_c::Start()
+bool ui_subscript_c::Start(lua_State* callerL)
 {
 	subWriting = false;
 	subCalls = NULL;
@@ -326,23 +326,23 @@ bool ui_subscript_c::Start()
 	lua_pushcfunction(L, l_os_exit);
 	lua_setfield(L, -2, "exit");
 	lua_pop(L, 1);
-	parseSubScriptList(L, lua_tostring(ui->L, 2), l_SubScriptFunc);
-	parseSubScriptList(L, lua_tostring(ui->L, 3), l_SubScriptSub);
+	parseSubScriptList(L, lua_tostring(callerL, 2), l_SubScriptFunc);
+	parseSubScriptList(L, lua_tostring(callerL, 3), l_SubScriptSub);
 
 	// Copy package.path and package.cpath from the main Lua state so that
 	// sub-scripts can find Lua modules and C modules in the same locations.
 	{
 		auto copyPackageField = [&](const char* field) {
-			lua_getglobal(ui->L, "package");
-			lua_getfield(ui->L, -1, field);
-			const char* val = lua_tostring(ui->L, -1);
+			lua_getglobal(callerL, "package");
+			lua_getfield(callerL, -1, field);
+			const char* val = lua_tostring(callerL, -1);
 			if (val) {
 				lua_getglobal(L, "package");
 				lua_pushstring(L, val);
 				lua_setfield(L, -2, field);
 				lua_pop(L, 1);
 			}
-			lua_pop(ui->L, 2);
+			lua_pop(callerL, 2);
 		};
 		copyPackageField("path");
 		copyPackageField("cpath");
@@ -351,14 +351,14 @@ bool ui_subscript_c::Start()
 	lua_gc(L, LUA_GCRESTART, -1);
 
 	// Load the script
-	int err = luaL_loadstring(L, lua_tostring(ui->L, 1));
+	int err = luaL_loadstring(L, lua_tostring(callerL, 1));
 	if (err) {
-		lua_pushstring(ui->L, lua_tostring(L, -1));
-		lua_error(ui->L);
+		lua_pushstring(callerL, lua_tostring(L, -1));
+		lua_error(callerL);
 	}
 
 	// Copy arguments and launch script thread
-	lua_pushinteger(L, ssPushData(L, ssBuildData(ui->L, 4)));
+	lua_pushinteger(L, ssPushData(L, ssBuildData(callerL, 4)));
 	ThreadStart();
 	running = true;
 
