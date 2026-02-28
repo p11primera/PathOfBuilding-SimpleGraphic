@@ -15,6 +15,11 @@
 #include "core.h"
 
 #include <GLFW/glfw3.h>
+#ifdef __APPLE__
+#define GLFW_EXPOSE_NATIVE_COCOA
+#include <GLFW/glfw3native.h>
+extern "C" void SysMac_FixEGLLayerScale(void* nsWindowPtr);
+#endif
 
 #include <deque>
 #include <map>
@@ -488,6 +493,16 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		}
 
 		glfwMakeContextCurrent(wnd);
+#ifdef __APPLE__
+		// Fix Retina scaling for the EGL/ANGLE code path.
+		// GLFW's EGL path doesn't set CALayer.contentsScale,
+		// so the ANGLE surface would be created at 1x on Retina.
+		// After updating the scale, swap buffers twice to force
+		// ANGLE to detect the new backing size and reallocate.
+		SysMac_FixEGLLayerScale(glfwGetCocoaWindow(wnd));
+		glfwSwapBuffers(wnd);
+		glfwSwapBuffers(wnd);
+#endif
 		gladLoadGLES2(glfwGetProcAddress);
 
 		// Set up all our window callbacks
