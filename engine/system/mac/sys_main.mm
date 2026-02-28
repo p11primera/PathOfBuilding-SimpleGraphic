@@ -133,6 +133,7 @@ extern "C" void SysMac_FixEGLLayerScale(void* nsWindowPtr)
         [CATransaction setDisableActions:YES];
         setScaleRecursive(layer, scale);
         [CATransaction commit];
-        [CATransaction flush];
+        // Note: [CATransaction flush] is not needed here — setDisableActions:YES
+        // causes commit to apply changes synchronously without animation.
     }
 }

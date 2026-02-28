@@ -38,6 +38,10 @@ extern "C" int RunLuaFileAsWin(int argc, char** argv);
 static std::string findLaunchScript()
 {
     // Locate the directory containing this executable.
+    // Note: proc_pidpath(getpid(), ...) returns the path of the currently
+    // running process image.  This is safe here because main() is the first
+    // C++ code to run and no execve() has occurred.  Do not call this after
+    // a fork/exec-based restart — use a re-exec pattern instead.
     char pathBuf[PROC_PIDPATHINFO_MAXSIZE]{};
     proc_pidpath(getpid(), pathBuf, sizeof(pathBuf));
     std::filesystem::path exePath(pathBuf);
