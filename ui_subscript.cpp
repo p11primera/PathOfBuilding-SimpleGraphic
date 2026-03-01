@@ -314,10 +314,9 @@ bool ui_subscript_c::Start(lua_State* callerL)
 	lua_rawseti(L, LUA_REGISTRYINDEX, 0);
 	lua_pushcfunction(L, traceback);
 
-#ifdef _WIN32
+	// Prevent LUA_PATH/LUA_CPATH env vars from overriding bundled module paths
 	lua_pushboolean(L, 1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
-#endif
 
 	// Add libraries and APIs
 	lua_gc(L, LUA_GCSTOP, 0);

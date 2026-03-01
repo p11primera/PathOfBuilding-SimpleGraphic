@@ -305,10 +305,9 @@ void ui_main_c::ScriptInit()
 	lua_pushvalue(L, -1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "traceback");
 
-#if _WIN32
+	// Prevent LUA_PATH/LUA_CPATH env vars from overriding bundled module paths
 	lua_pushboolean(L, 1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
-#endif
 
 	// Add libraries and APIs
 	lua_gc(L, LUA_GCSTOP, 0);
