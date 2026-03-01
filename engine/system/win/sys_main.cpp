@@ -698,6 +698,16 @@ bool sys_main_c::Run(int argc, char** argv)
 		// Initialise engine
 		core->Init(argc, argv);
 
+		// Frame timing for software frame limiter.
+		// ANGLE's Metal backend may not block on glfwSwapBuffers even with
+		// vsync enabled, causing the loop to spin at 100% CPU.  Cap at the
+		// display refresh rate (or ~60 fps as a safe default).
+		using frame_clock = std::chrono::steady_clock;
+		auto lastFrameTime = frame_clock::now();
+		// Target ~16.67 ms per frame (60 Hz).  Could be made dynamic
+		// via glfwGetVideoMode()->refreshRate, but 60 fps is a safe floor.
+		constexpr auto targetFrameDuration = std::chrono::microseconds(16667);
+
 		// Run frame loop
 		while (exitFlag == false) {
 			if (minimized) {
@@ -715,6 +725,17 @@ bool sys_main_c::Run(int argc, char** argv)
 
 			if (threadError) {
 				Error(threadError);
+			}
+
+			// Software frame limiter: sleep until the next frame boundary
+			// if the GPU/driver swap didn't already block long enough.
+			if (!minimized) {
+				auto now = frame_clock::now();
+				auto elapsed = now - lastFrameTime;
+				if (elapsed < targetFrameDuration) {
+					std::this_thread::sleep_for(targetFrameDuration - elapsed);
+				}
+				lastFrameTime = frame_clock::now();
 			}
 		}
 
