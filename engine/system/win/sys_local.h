@@ -19,6 +19,7 @@
 #include <mmsystem.h>
 #endif
 
+#include <atomic>
 #include <chrono>
 #include <vector>
 
@@ -38,6 +39,7 @@ public:
 	bool	SetWorkDir(std::filesystem::path const& newCwd = {});
 	void	SpawnProcess(std::filesystem::path cmdName, const char* argList);
 	std::optional<std::string> OpenURL(const char* url); // return value has failure reason
+	void	PumpEvents();
 	void	Error(const char* fmt, ...);
 	void	Exit(const char* msg = NULL);
 	void	Restart();
@@ -66,4 +68,9 @@ public:
 	bool	errorRaised = false;
 	std::chrono::system_clock::time_point baseTime;
 	std::vector<uint8_t> heldKeyState;
+
+	// Frame pacing: set by GLFW input callbacks, consumed by main loop.
+	// When no input arrives, the main loop progressively lowers the frame
+	// rate to reduce CPU usage (ANGLE/Metal doesn't block on swap).
+	std::atomic<bool> hadInputEvent{false};
 };

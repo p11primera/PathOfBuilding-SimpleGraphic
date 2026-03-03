@@ -44,5 +44,31 @@
             "baseline": "3.3.1",
             "port-version": 1
         }
+    },
+    "2026-03-01": {
+        "abseil": {
+            "baseline": "20240116.2",
+            "port-version": 3
+        },
+        "glfw3": {
+            "baseline": "3.4",
+            "port-version": 1
+        },
+        "gli": {
+            "baseline": "2021-07-06",
+            "port-version": 3
+        },
+        "luajit": {
+            "baseline": "2026-02-26",
+            "port-version": 1
+        },
+        "re2": {
+            "baseline": "2024-06-01",
+            "port-version": 1
+        },
+        "sol2": {
+            "baseline": "3.3.1",
+            "port-version": 1
+        }
     }
 }

@@ -1649,6 +1649,16 @@ static int l_GetTime(lua_State* L)
 	return 1;
 }
 
+// ** PumpEvents()
+// Processes pending OS events (mouse, keyboard, window).
+// Call during long-running init to prevent macOS "not responding" beachball.
+static int l_PumpEvents(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->sys->PumpEvents();
+	return 0;
+}
+
 static int l_GetProcessorCount(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -1855,7 +1865,11 @@ static int l_IsSubScriptRunning(lua_State* L)
 	ui->LAssert(L, n >= 1, "Usage: IsSubScriptRunning(ssID)");
 	ui->LAssert(L, lua_islightuserdata(L, 1), "IsSubScriptRunning() argument 1: expected subscript ID, got %s", luaL_typename(L, 1));
 	dword slot = (dword)(uintptr_t)lua_touserdata(L, 1) - 1;
-	ui->LAssert(L, slot < ui->subScriptSize && ui->subScriptList[slot], "IsSubScriptRunning() argument 1: invalid subscript ID");
+	// A freed or out-of-range slot means the subscript already completed — return false.
+	if (slot >= ui->subScriptSize || !ui->subScriptList[slot]) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
 	lua_pushboolean(L, ui->subScriptList[slot]->IsRunning());
 	return 1;
 }
@@ -2322,6 +2336,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(Deflate);
 	ADDFUNC(Inflate);
 	ADDFUNC(GetTime);
+	ADDFUNC(PumpEvents);
 	ADDFUNC(GetProcessorCount);
 	ADDFUNC(GetScriptPath);
 	ADDFUNC(GetRuntimePath);

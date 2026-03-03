@@ -538,6 +538,11 @@ void sys_main_c::Error(const char *fmt, ...)
 #endif
 }
 
+void sys_main_c::PumpEvents()
+{
+	glfwPollEvents();
+}
+
 void sys_main_c::Exit(const char* msg)
 {
 	if (initialised) {
@@ -698,15 +703,21 @@ bool sys_main_c::Run(int argc, char** argv)
 		// Initialise engine
 		core->Init(argc, argv);
 
-		// Frame timing for software frame limiter.
-		// ANGLE's Metal backend may not block on glfwSwapBuffers even with
-		// vsync enabled, causing the loop to spin at 100% CPU.  Cap at the
-		// display refresh rate (or ~60 fps as a safe default).
+#ifdef __APPLE__
+		// Frame pacing for macOS where ANGLE's Metal backend doesn't block
+		// on glfwSwapBuffers (triple-buffered, returns immediately).
+		//
+		// Without pacing the loop spins at 100% CPU.  We use adaptive frame
+		// rate: 60 fps while the user is interacting, ramping down to 4 fps
+		// after ~1 s of inactivity.  Input callbacks set hadInputEvent which
+		// resets the idle counter instantly so dragging/zooming stays smooth.
+		//
+		// glfwWaitEventsTimeout yields CPU AND wakes immediately on input,
+		// combining throttling with zero-latency event delivery.
 		using frame_clock = std::chrono::steady_clock;
-		auto lastFrameTime = frame_clock::now();
-		// Target ~16.67 ms per frame (60 Hz).  Could be made dynamic
-		// via glfwGetVideoMode()->refreshRate, but 60 fps is a safe floor.
-		constexpr auto targetFrameDuration = std::chrono::microseconds(16667);
+		auto frameStart = frame_clock::now();
+		int idleFrames = 0;
+#endif
 
 		// Run frame loop
 		while (exitFlag == false) {
@@ -727,16 +738,34 @@ bool sys_main_c::Run(int argc, char** argv)
 				Error(threadError);
 			}
 
-			// Software frame limiter: sleep until the next frame boundary
-			// if the GPU/driver swap didn't already block long enough.
+#ifdef __APPLE__
+			// Adaptive frame pacing — ramp down fps when idle.
 			if (!minimized) {
-				auto now = frame_clock::now();
-				auto elapsed = now - lastFrameTime;
-				if (elapsed < targetFrameDuration) {
-					std::this_thread::sleep_for(targetFrameDuration - elapsed);
+				if (hadInputEvent.exchange(false, std::memory_order_relaxed)) {
+					idleFrames = 0;
+				} else {
+					idleFrames++;
 				}
-				lastFrameTime = frame_clock::now();
+
+				// Choose target frame period based on idle duration.
+				double targetFrameSec;
+				if (idleFrames < 60) {
+					targetFrameSec = 1.0 / 60.0;   // 60 fps while active
+				} else if (idleFrames < 180) {
+					targetFrameSec = 1.0 / 10.0;   // 10 fps for ~2 s (animations settling)
+				} else {
+					targetFrameSec = 1.0 / 2.0;    //  2 fps deep idle
+				}
+
+				auto frameEnd = frame_clock::now();
+				double elapsed = std::chrono::duration<double>(frameEnd - frameStart).count();
+				double remaining = targetFrameSec - elapsed;
+				if (remaining > 0.001) {
+					glfwWaitEventsTimeout(remaining);
+				}
+				frameStart = frame_clock::now();
 			}
+#endif
 		}
 
 		// Shutdown engine

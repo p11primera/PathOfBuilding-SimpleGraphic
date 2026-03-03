@@ -120,6 +120,48 @@ target_include_directories(SimpleGraphic
 )
 
 find_package(unofficial-angle CONFIG REQUIRED)
+
+# ── Fix ANGLE linkage on macOS: use dynamic libraries, not static archives ───
+#
+# GLFW's EGL code path calls dlopen("libEGL.dylib") at runtime, loading ANGLE
+# as a shared library.  The vcpkg ANGLE port also produces cmake STATIC
+# IMPORTED targets (pointing to .a files).  If both are used, two copies of
+# ANGLE coexist with independent thread-local storage.  The async shader
+# compiler then crashes because GetGlobalPoolAllocator() returns NULL on
+# worker threads whose TLS was initialised in the dynamic copy but whose
+# weak-symbol template instantiations were coalesced to the static copy.
+#
+# Fix: redirect the cmake targets to the .dylib files so only one copy of
+# ANGLE is loaded at runtime.
+if (APPLE)
+    set(_angle_lib_dir "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib")
+    set(_angle_egl_dylib "${_angle_lib_dir}/liblibEGL_angle.dylib")
+    set(_angle_gles_dylib "${_angle_lib_dir}/liblibGLESv2_angle.dylib")
+    if (EXISTS "${_angle_egl_dylib}" AND EXISTS "${_angle_gles_dylib}")
+        message(STATUS "ANGLE: redirecting cmake targets to dynamic libraries")
+        # Point the imported targets at the dylibs instead of the .a archives.
+        set_target_properties(unofficial::angle::libEGL PROPERTIES
+            IMPORTED_LOCATION "${_angle_egl_dylib}"
+            IMPORTED_LOCATION_RELEASE "${_angle_egl_dylib}"
+        )
+        set_target_properties(unofficial::angle::libGLESv2 PROPERTIES
+            IMPORTED_LOCATION "${_angle_gles_dylib}"
+            IMPORTED_LOCATION_RELEASE "${_angle_gles_dylib}"
+        )
+        # The dylibs already embed the core ANGLE.a and link Apple frameworks
+        # internally; clear transitive link dependencies so the static archive
+        # is not also pulled in.
+        set_property(TARGET unofficial::angle::libEGL
+            PROPERTY INTERFACE_LINK_LIBRARIES "")
+        set_property(TARGET unofficial::angle::libGLESv2
+            PROPERTY INTERFACE_LINK_LIBRARIES "")
+    else ()
+        message(WARNING
+            "ANGLE dylibs not found — falling back to static linkage. "
+            "This WILL crash at runtime if GLFW also loads ANGLE dynamically.")
+    endif ()
+endif ()
+
 find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)

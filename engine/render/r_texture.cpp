@@ -500,6 +500,10 @@ static gli::texture2d_array TranscodeTexture(gli::texture2d_array src, gli::form
 			const size_t srcLevel = dstLevel + firstLevel;
 			const auto* srcData = (const uint8_t*)src.data(layer, 0, srcLevel);
 
+			// Pre-compute end pointers for validation (must be done before loops advance the pointers)
+			const auto* srcEnd = srcData + src.size(srcLevel);
+			const auto* dstEnd = dstData + dst.size(dstLevel);
+
 			const auto srcBlockSize = gli::block_extent(srcFormat);
 			const auto srcBlocksPerRow = (dstExtent.y + srcBlockSize.y - 1) / srcBlockSize.y; // round up partial blocks
 			const auto srcBlocksPerColumn = (dstExtent.x + srcBlockSize.x - 1) / srcBlockSize.x; // -''-
@@ -542,8 +546,6 @@ static gli::texture2d_array TranscodeTexture(gli::texture2d_array src, gli::form
 					dstData += dstRowStride * rowsLeft;
 			}
 
-			const auto* srcEnd = srcData + src.size(srcLevel);
-			const auto* dstEnd = dstData + dst.size(dstLevel);
 			assert(srcData == srcEnd);
 			assert(dstData == dstEnd);
 		}
@@ -634,7 +636,7 @@ void r_tex_c::Upload(image_c& img, int flags)
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
 	glTexParameteri(target, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, (GLint)tex.levels());
+	glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, (GLint)(tex.levels() - 1));
 	glTexParameteri(target, GL_TEXTURE_SWIZZLE_R, format.Swizzles.r);
 	glTexParameteri(target, GL_TEXTURE_SWIZZLE_G, format.Swizzles.g);
 	glTexParameteri(target, GL_TEXTURE_SWIZZLE_B, format.Swizzles.b);
