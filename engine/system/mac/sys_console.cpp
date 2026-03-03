@@ -102,7 +102,9 @@ void sys_console_c::SetForeground()
 
 bool sys_console_c::IsVisible()
 {
-	return true;
+	// macOS has no console window — return false so the idle detection in
+	// ui_main_c::Frame() doesn't think a console is being displayed.
+	return false;
 }
 
 void sys_console_c::SetTitle(const char* title)

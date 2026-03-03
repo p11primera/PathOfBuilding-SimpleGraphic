@@ -520,6 +520,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			});
 		glfwSetCursorPosCallback(wnd, [](GLFWwindow* wnd, double x, double y) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->hadInputEvent.store(true, std::memory_order_relaxed);
 			if (ImGui::GetIO().WantCaptureMouse) {
 				return;
 			}
@@ -555,6 +556,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			});
 		glfwSetCharCallback(wnd, [](GLFWwindow* wnd, uint32_t codepoint) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->hadInputEvent.store(true, std::memory_order_relaxed);
 			if (ImGui::GetIO().WantCaptureKeyboard) {
 				return;
 			}
@@ -562,6 +564,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			});
 		glfwSetKeyCallback(wnd, [](GLFWwindow* wnd, int key, int scancode, int action, int mods) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->hadInputEvent.store(true, std::memory_order_relaxed);
 			if (ImGui::GetIO().WantCaptureKeyboard) {
 				return;
 			}
@@ -577,6 +580,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			});
 		glfwSetMouseButtonCallback(wnd, [](GLFWwindow* wnd, int button, int action, int mods) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->hadInputEvent.store(true, std::memory_order_relaxed);
 			if (ImGui::GetIO().WantCaptureMouse) {
 				return;
 			}
@@ -641,6 +645,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			});
 		glfwSetScrollCallback(wnd, [](GLFWwindow* wnd, double xoffset, double yoffset) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->hadInputEvent.store(true, std::memory_order_relaxed);
 			if (ImGui::GetIO().WantCaptureMouse) {
 				return;
 			}
@@ -695,6 +700,19 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	}
 
 	initialised = true;
+
+	// macOS doesn't fire glfwSetCursorEnterCallback when the cursor is
+	// already inside the window at creation time.  Query actual cursor
+	// position so that IsCursorOverWindow() returns true immediately and
+	// the frame loop doesn't skip OnFrame processing.
+	{
+		double cx, cy;
+		glfwGetCursorPos(wnd, &cx, &cy);
+		if (cx >= 0 && cy >= 0 && cx < vid.size[0] && cy < vid.size[1]) {
+			cursorInWindow = true;
+		}
+	}
+
 	return 0;
 }
 

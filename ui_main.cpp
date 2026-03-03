@@ -337,6 +337,15 @@ void ui_main_c::ScriptInit()
 
 	// Run the script
 	sys->con->Printf("Running script...\n");
+
+	// Report LuaJIT JIT compiler status
+	luaL_dostring(L, R"lua(
+		local jit = require('jit')
+		io.stderr:write(string.format('LuaJIT %s [%s/%s] JIT: %s\n',
+			jit.version, jit.arch, jit.os, tostring(jit.status())))
+		io.stderr:flush()
+	)lua");
+
 	for (int i = 0; i < scriptArgc; i++) {
 		lua_pushstring(L, scriptArgv[i]);
 	}
@@ -384,11 +393,21 @@ void ui_main_c::Frame()
 	else if (framesSinceWindowHidden <= 10) {
 		framesSinceWindowHidden++;
 	}
-	// Otherwise only runs frames if the mouse is on screen, there is an active coroutine, or there is an active subscript
+	// Otherwise only runs frames if the mouse is on screen, there is an active coroutine, or there is an active subscript.
+	// On macOS with ANGLE/EGL, GLFW_FOCUSED can report true even when the window
+	// is unfocused, so we skip the IsActive() check there.
+#ifdef __APPLE__
+	else if (!sys->video->IsCursorOverWindow() && !hasActiveCoroutine && !hasSubscript) {
+#else
 	else if (!sys->video->IsActive() && !sys->video->IsCursorOverWindow() && !hasActiveCoroutine && !hasSubscript) {
+#endif
+		// On macOS, sys_main.cpp adaptive frame pacing handles throttling
+		// via glfwWaitEventsTimeout.  Sleep here would add input latency.
+#ifndef __APPLE__
 		sys->Sleep(100);
+#endif
 		return;
-	}	
+	}
 	
 	if (renderer) {
 		// Prepare for rendering
@@ -431,8 +450,15 @@ void ui_main_c::Frame()
 	}
 
 	//sys->con->Printf("Finishing up...\n");
+#ifdef __APPLE__
+	if ( !hasActiveCoroutine && !hasSubscript ) {
+#else
 	if ( !sys->video->IsActive() && !hasActiveCoroutine && !hasSubscript ) {
+#endif
+		// On macOS, sys_main.cpp adaptive frame pacing handles throttling.
+#ifndef __APPLE__
 		sys->Sleep(100);
+#endif
 	}
 
 	while (restartFlag) {
