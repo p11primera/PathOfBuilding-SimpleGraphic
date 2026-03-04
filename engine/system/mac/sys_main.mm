@@ -49,12 +49,16 @@ extern "C" bool SysMac_FindUserPath(char* buf, size_t bufSize)
     NSArray<NSString*>* dirs = NSSearchPathForDirectoriesInDomains(
         NSApplicationSupportDirectory, NSUserDomainMask, YES);
     NSString* appSupport = dirs.firstObject;
-    if (!appSupport)
+    if (!appSupport) {
+        NSLog(@"SysMac_FindUserPath: NSSearchPathForDirectoriesInDomains returned nil");
         return false;
+    }
 
     const char* utf8 = appSupport.UTF8String;
-    if (std::strlen(utf8) >= bufSize)
+    if (std::strlen(utf8) >= bufSize) {
+        NSLog(@"SysMac_FindUserPath: buffer too small (need %zu, have %zu)", std::strlen(utf8) + 1, bufSize);
         return false;
+    }
 
     std::strncpy(buf, utf8, bufSize - 1);
     buf[bufSize - 1] = '\0';

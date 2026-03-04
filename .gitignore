@@ -3,3 +3,4 @@
 /.idea/build-mac/
 /build-mac/
 /rebuild-luajit.sh
+.vscode/
