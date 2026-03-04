@@ -347,12 +347,18 @@ if (APPLE)
             COMMENT "Copying ANGLE dylibs and creating symlinks for GLFW"
         )
         install(CODE "
-            execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
-                \"liblibEGL_angle.dylib\"
-                \"\${CMAKE_INSTALL_PREFIX}/Frameworks/libEGL.dylib\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
-                \"liblibGLESv2_angle.dylib\"
-                \"\${CMAKE_INSTALL_PREFIX}/Frameworks/libGLESv2.dylib\")
+            set(_angle_egl_install \"\${CMAKE_INSTALL_PREFIX}/Frameworks/liblibEGL_angle.dylib\")
+            set(_angle_gles_install \"\${CMAKE_INSTALL_PREFIX}/Frameworks/liblibGLESv2_angle.dylib\")
+            if (EXISTS \"\${_angle_egl_install}\" AND EXISTS \"\${_angle_gles_install}\")
+                execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
+                    \"liblibEGL_angle.dylib\"
+                    \"\${CMAKE_INSTALL_PREFIX}/Frameworks/libEGL.dylib\")
+                execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
+                    \"liblibGLESv2_angle.dylib\"
+                    \"\${CMAKE_INSTALL_PREFIX}/Frameworks/libGLESv2.dylib\")
+            else ()
+                message(WARNING \"ANGLE dylibs not found at install time - symlinks not created\")
+            endif ()
         ")
     else ()
         message(WARNING "ANGLE shared libraries not found — GLFW EGL init will fail")

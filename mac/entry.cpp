@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 #include <libproc.h>
 #include <unistd.h>
 #include <filesystem>
@@ -76,10 +77,16 @@ int main(int argc, char** argv)
         // The engine resolves relative paths against basePath (exe dir),
         // but the user expects resolution against CWD.  Make it absolute.
         std::filesystem::path scriptArg(argv[1]);
-        std::string absScript;
         if (scriptArg.is_relative()) {
-            absScript = std::filesystem::absolute(scriptArg).string();
-            argv[1] = const_cast<char*>(absScript.c_str());
+            // Build a new argv array with the absolute path to avoid lifetime issues
+            std::string absScript = std::filesystem::absolute(scriptArg).string();
+            std::vector<char*> newArgv;
+            newArgv.reserve(argc);
+            newArgv.push_back(const_cast<char*>(absScript.c_str()));
+            for (int i = 2; i < argc; ++i) {
+                newArgv.push_back(argv[i]);
+            }
+            return RunLuaFileAsWin(static_cast<int>(newArgv.size()), newArgv.data());
         }
         return RunLuaFileAsWin(argc - 1, argv + 1);
     }
