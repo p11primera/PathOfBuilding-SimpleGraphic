@@ -437,21 +437,20 @@ target_include_directories(lcurl
     ${LCURL_SOURCE_DIR}/src
 )
 
-# LuaJIT 2.1 already provides luaL_setfuncs (and other Lua 5.2 compat
-# functions) in lib_aux. l52util.c defines them when LUA_VERSION_NUM < 502,
-# which is always true for LuaJIT (it reports 501), causing a duplicate symbol
-# at link time. Override LUA_VERSION_NUM only for this translation unit so it
-# takes the >= 502 branch, which defines luaL_typerror/luaL_register but skips
-# the already-provided luaL_setfuncs and friends.
-set_source_files_properties(
-    "${LCURL_SOURCE_DIR}/src/l52util.c"
-    PROPERTIES COMPILE_DEFINITIONS "LUA_VERSION_NUM=502"
-)
-
+# On macOS all Lua C modules are loaded into a running LuaJIT process, so
+# all lua_* / luaL_* symbols are already present in the host.  Linking the
+# static libluajit-5.1.a would duplicate those symbols (e.g. luaL_setfuncs
+# from l52util.c vs lib_aux.o), causing a linker error.  The standard
+# solution is -undefined dynamic_lookup: unresolved Lua symbols are resolved
+# at dlopen() time from the host.  On Windows the import-lib linkage is still
+# required.
 target_link_libraries(lcurl
     PRIVATE
     CURL::libcurl
-    LuaJIT::LuaJIT
+    $<$<NOT:$<BOOL:${APPLE}>>:LuaJIT::LuaJIT>
+)
+target_link_options(lcurl PRIVATE
+    $<$<BOOL:${APPLE}>:-undefined dynamic_lookup>
 )
 
 install(TARGETS lcurl
@@ -495,7 +494,10 @@ target_include_directories(lua-utf8
 
 target_link_libraries(lua-utf8
     PRIVATE
-    LuaJIT::LuaJIT
+    $<$<NOT:$<BOOL:${APPLE}>>:LuaJIT::LuaJIT>
+)
+target_link_options(lua-utf8 PRIVATE
+    $<$<BOOL:${APPLE}>:-undefined dynamic_lookup>
 )
 
 install(TARGETS lua-utf8
@@ -536,7 +538,10 @@ target_include_directories(luasocket
 
 target_link_libraries(luasocket
     PRIVATE
-    LuaJIT::LuaJIT
+    $<$<NOT:$<BOOL:${APPLE}>>:LuaJIT::LuaJIT>
+)
+target_link_options(luasocket PRIVATE
+    $<$<BOOL:${APPLE}>:-undefined dynamic_lookup>
 )
 if (WIN32)
     target_link_libraries(luasocket PRIVATE wsock32 ws2_32)
@@ -560,8 +565,11 @@ target_include_directories(lzip
 
 target_link_libraries(lzip
     PRIVATE
-    LuaJIT::LuaJIT
+    $<$<NOT:$<BOOL:${APPLE}>>:LuaJIT::LuaJIT>
     ZLIB::ZLIB
+)
+target_link_options(lzip PRIVATE
+    $<$<BOOL:${APPLE}>:-undefined dynamic_lookup>
 )
 
 install(TARGETS lzip
