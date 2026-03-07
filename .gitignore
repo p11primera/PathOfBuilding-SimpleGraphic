@@ -1,6 +1,8 @@
 /build/
+/build-mac/
+/build-test/
 /build-SimpleGraphic
 /.idea/build-mac/
-/build-mac/
 /rebuild-luajit.sh
 .vscode/
+

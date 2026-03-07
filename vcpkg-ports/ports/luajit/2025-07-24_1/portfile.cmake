@@ -36,7 +36,9 @@ if(VCPKG_TARGET_IS_OSX)
     )
     if(_osx_sdk)
         set(_dst_rel "${CURRENT_BUILDTREES_DIR}/cmake-vars-${TARGET_TRIPLET}-rel.cmake.log")
-        set(_src_rel "${CURRENT_BUILDTREES_DIR}/cmake-get-vars-${TARGET_TRIPLET}-rel.cmake.log")
+        # vcpkg_cmake_get_vars writes cmake-get-vars_C_CXX-<triplet>-rel.cmake.log
+        # (the _C_CXX configuration suffix is derived from the default C+CXX language list).
+        set(_src_rel "${CURRENT_BUILDTREES_DIR}/cmake-get-vars_C_CXX-${TARGET_TRIPLET}-rel.cmake.log")
 
         # Helper macro: patch a cmake vars file so that bare " -isysroot " is replaced
         # with " -isysroot <real_sdk_path> ".  Appends set() overrides at the end of
