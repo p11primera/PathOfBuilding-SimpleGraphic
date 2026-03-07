@@ -426,6 +426,24 @@ if (WIN32)
 endif ()
 
 
+# On macOS, Lua C modules are loaded into a running LuaJIT process so all
+# lua_*/luaL_* symbols resolve from the host at dlopen() time.  Linking the
+# static libluajit-5.1.a would cause duplicate-symbol errors (e.g.
+# luaL_setfuncs defined in both l52util.c and lib_aux.o).  The fix is to use
+# -undefined dynamic_lookup and NOT link the static archive.
+# However we still need LuaJIT headers at compile time.  This function adds
+# the include directories from the imported target without creating a link dep.
+function(target_luajit_link target)
+    if (APPLE)
+        # Headers only — no static lib
+        target_include_directories(${target} PRIVATE
+            $<TARGET_PROPERTY:LuaJIT::LuaJIT,INTERFACE_INCLUDE_DIRECTORIES>)
+        target_link_options(${target} PRIVATE -undefined dynamic_lookup)
+    else()
+        target_link_libraries(${target} PRIVATE LuaJIT::LuaJIT)
+    endif()
+endfunction()
+
 # lcurl module
 
 set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
@@ -437,21 +455,11 @@ target_include_directories(lcurl
     ${LCURL_SOURCE_DIR}/src
 )
 
-# On macOS all Lua C modules are loaded into a running LuaJIT process, so
-# all lua_* / luaL_* symbols are already present in the host.  Linking the
-# static libluajit-5.1.a would duplicate those symbols (e.g. luaL_setfuncs
-# from l52util.c vs lib_aux.o), causing a linker error.  The standard
-# solution is -undefined dynamic_lookup: unresolved Lua symbols are resolved
-# at dlopen() time from the host.  On Windows the import-lib linkage is still
-# required.
 target_link_libraries(lcurl
     PRIVATE
     CURL::libcurl
-    $<$<NOT:$<BOOL:${APPLE}>>:LuaJIT::LuaJIT>
 )
-target_link_options(lcurl PRIVATE
-    $<$<BOOL:${APPLE}>:-undefined dynamic_lookup>
-)
+target_luajit_link(lcurl)
 
 install(TARGETS lcurl
     RUNTIME DESTINATION "."
@@ -492,13 +500,7 @@ target_include_directories(lua-utf8
     "${CMAKE_CURRENT_SOURCE_DIR}/libs/luautf8"
 )
 
-target_link_libraries(lua-utf8
-    PRIVATE
-    $<$<NOT:$<BOOL:${APPLE}>>:LuaJIT::LuaJIT>
-)
-target_link_options(lua-utf8 PRIVATE
-    $<$<BOOL:${APPLE}>:-undefined dynamic_lookup>
-)
+target_luajit_link(lua-utf8)
 
 install(TARGETS lua-utf8
     RUNTIME DESTINATION "."
@@ -536,13 +538,7 @@ target_include_directories(luasocket
     "${CMAKE_CURRENT_SOURCE_DIR}/libs/luasocket/src"
 )
 
-target_link_libraries(luasocket
-    PRIVATE
-    $<$<NOT:$<BOOL:${APPLE}>>:LuaJIT::LuaJIT>
-)
-target_link_options(luasocket PRIVATE
-    $<$<BOOL:${APPLE}>:-undefined dynamic_lookup>
-)
+target_luajit_link(luasocket)
 if (WIN32)
     target_link_libraries(luasocket PRIVATE wsock32 ws2_32)
 endif ()
@@ -565,12 +561,9 @@ target_include_directories(lzip
 
 target_link_libraries(lzip
     PRIVATE
-    $<$<NOT:$<BOOL:${APPLE}>>:LuaJIT::LuaJIT>
     ZLIB::ZLIB
 )
-target_link_options(lzip PRIVATE
-    $<$<BOOL:${APPLE}>:-undefined dynamic_lookup>
-)
+target_luajit_link(lzip)
 
 install(TARGETS lzip
     RUNTIME DESTINATION "."
