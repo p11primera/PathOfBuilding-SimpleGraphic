@@ -5,6 +5,52 @@ on:
   release:
       types: [published]
 jobs:
+  build_macos:
+    runs-on: macos-14  # macos-14 = M1 arm64
+    env:
+      INST_DIR: ${{ github.workspace }}/install-prefix
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Install dependencies
+        run: brew install cmake ninja
+
+      - name: Configure
+        run: |
+          SDK=$(xcrun --show-sdk-path)
+          cmake -B build -G Ninja \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_SYSROOT="$SDK" \
+            -DVCPKG_TARGET_TRIPLET=arm64-osx \
+            -DVCPKG_OVERLAY_TRIPLETS=./vcpkg-triplets \
+            -DCMAKE_TOOLCHAIN_FILE=./vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${{ env.INST_DIR }}"
+
+      - name: Build
+        run: cmake --build build -j$(sysctl -n hw.logicalcpu)
+
+      - name: Install
+        run: cmake --install build
+
+      - name: Upload macOS install artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SimpleGraphic-arm64-osx
+          path: ${{ env.INST_DIR }}
+          retention-days: 30
+
+      - name: Upload to release
+        if: ${{ github.event_name == 'release' }}
+        run: |
+          cd "${{ env.INST_DIR }}"
+          tar -czf SimpleGraphic-arm64-osx.tar.gz .
+          gh release upload ${{ github.event.release.tag_name }} SimpleGraphic-arm64-osx.tar.gz
+
   build_dll:
     strategy:
       matrix:
