@@ -451,7 +451,20 @@ install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
 # luautf8 module
 
-add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
+# lutf8lib.c has a C label ('build_string:') immediately followed by a variable
+# declaration, which is invalid C (a label must precede a statement).  MSVC
+# accepts it silently; Clang rejects it with "expected expression".  We can't
+# commit the fix into the upstream submodule, so patch at configure time.
+set(_luautf8_src "${CMAKE_CURRENT_SOURCE_DIR}/libs/luautf8/lutf8lib.c")
+set(_luautf8_patched "${CMAKE_CURRENT_BINARY_DIR}/lutf8lib_patched.c")
+file(READ "${_luautf8_src}" _luautf8_content)
+string(REPLACE
+    "build_string:\n  /* We will need to build a new string"
+    "build_string:; /* We will need to build a new string"
+    _luautf8_content "${_luautf8_content}")
+file(WRITE "${_luautf8_patched}" "${_luautf8_content}")
+
+add_library(lua-utf8 SHARED "${_luautf8_patched}")
 
 target_compile_definitions(lua-utf8
     PRIVATE
@@ -466,6 +479,7 @@ target_compile_options(lua-utf8
 
 target_include_directories(lua-utf8
     PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/luautf8"
 )
 
 target_link_libraries(lua-utf8
@@ -506,7 +520,7 @@ add_library(luasocket SHARED
 
 target_include_directories(luasocket
     PRIVATE
-    ${LSOCKET_SOURCE_DIR}/src
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/luasocket/src"
 )
 
 target_link_libraries(luasocket
@@ -530,6 +544,7 @@ add_library(lzip SHARED libs/LZip/lzip.cpp)
 
 target_include_directories(lzip
     PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/LZip"
 )
 
 target_link_libraries(lzip
