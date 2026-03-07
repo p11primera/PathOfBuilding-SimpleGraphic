@@ -437,6 +437,17 @@ target_include_directories(lcurl
     ${LCURL_SOURCE_DIR}/src
 )
 
+# LuaJIT 2.1 already provides luaL_setfuncs (and other Lua 5.2 compat
+# functions) in lib_aux. l52util.c defines them when LUA_VERSION_NUM < 502,
+# which is always true for LuaJIT (it reports 501), causing a duplicate symbol
+# at link time. Override LUA_VERSION_NUM only for this translation unit so it
+# takes the >= 502 branch, which defines luaL_typerror/luaL_register but skips
+# the already-provided luaL_setfuncs and friends.
+set_source_files_properties(
+    "${LCURL_SOURCE_DIR}/src/l52util.c"
+    PROPERTIES COMPILE_DEFINITIONS "LUA_VERSION_NUM=502"
+)
+
 target_link_libraries(lcurl
     PRIVATE
     CURL::libcurl
