@@ -61,7 +61,7 @@
             "port-version": 0
         },
         "luajit": {
-            "baseline": "2026-07-20",
+            "baseline": "2026-02-26",
             "port-version": 1
         },
         "re2": {

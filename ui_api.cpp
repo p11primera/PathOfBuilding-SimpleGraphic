@@ -2168,12 +2168,13 @@ int ui_main_c::InitAPI(lua_State* L)
 		lua_pop(L, 1);
 
 		// Absolute: <script_dir>/../runtime/lua/?.lua  (PoB2 repo & app bundle layout)
-		auto runtimeLuaBase = (ui->scriptPath.parent_path() / "runtime" / "lua").generic_u8string();
+		auto to_str = [](const std::u8string& s) { return std::string(reinterpret_cast<const char*>(s.data()), s.size()); };
+		auto runtimeLuaBase = to_str((ui->scriptPath.parent_path() / "runtime" / "lua").generic_u8string());
 		cur += ";" + runtimeLuaBase + "/?.lua";
 		cur += ";" + runtimeLuaBase + "/?/init.lua";
 
 		// Absolute: <exe_dir>/lua/?.lua  (mirrors Windows "!" expansion)
-		auto absLuaBase = (ui->sys->basePath / "lua").generic_u8string();
+		auto absLuaBase = to_str((ui->sys->basePath / "lua").generic_u8string());
 		cur += ";" + absLuaBase + "/?.lua";
 		cur += ";" + absLuaBase + "/?/init.lua";
 
@@ -2198,9 +2199,10 @@ int ui_main_c::InitAPI(lua_State* L)
 		lua_pop(L, 1);
 
 		// App bundle: <exe_dir>/../Frameworks/?.so  (highest priority)
-		auto fwDir = (ui->sys->basePath / ".." / "Frameworks" / "?.so").generic_u8string();
+		auto to_str = [](const std::u8string& s) { return std::string(reinterpret_cast<const char*>(s.data()), s.size()); };
+		auto fwDir = to_str((ui->sys->basePath / ".." / "Frameworks" / "?.so").generic_u8string());
 		// Absolute: <exe_dir>/?.so  (fallback for non-bundle layouts)
-		auto absCDir = (ui->sys->basePath / "?.so").generic_u8string();
+		auto absCDir = to_str((ui->sys->basePath / "?.so").generic_u8string());
 
 		cur = fwDir + ";" + absCDir + ";" + cur;
 
