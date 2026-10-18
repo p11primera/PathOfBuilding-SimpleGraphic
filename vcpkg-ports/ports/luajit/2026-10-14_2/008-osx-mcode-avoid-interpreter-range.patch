@@ -1,0 +1,48 @@
+From: LuaJIT issue #1520 (candidate fix by MikePall + ludamad, Oct 2026)
+Subject: [PATCH] ARM64/macOS: don't place mcode range near the interpreter
+
+macOS's W^X rules refuse executable pages within the ±128MB direct-jump
+range around the interpreter, so mcode_alloc() repeatedly receives
+badly-placed areas, flushes traces, and re-places them into the same
+unusable region — a degenerate flush/retry storm. Hot Lua loops never
+run compiled or cleanly interpreted (observed as an apparent hang of the
+PathOfBuilding optimizer spec suite on macOS ARM64 runners; fine on
+Linux ARM64 and with the JIT off).
+
+Fix: on macOS, skip the initial "range near interpreter" placement and
+seed a new range at a random far address instead (falling back to
+OS-chosen placement). Matches MikePall's suggestion in #1520 plus
+ludamad's tested OSX random-hint variant.
+
+--- a/src/lj_mcode.c
++++ b/src/lj_mcode.c
+@@ -297,6 +297,10 @@
+   uintptr_t hint;
+   int i = 0, j;
+   if (!J->mcmin)  /* Place initial range near the interpreter code. */
++#if LJ_TARGET_OSX
++    goto newrange;  /* But macOS doesn't give us enough space there. */
++#else
+     mcode_setrange(J, (uintptr_t)(void *)lj_vm_exit_handler);
++#endif
+   else if (!J->mcmax)  /* Switch to a new range (already flushed). */
+     goto newrange;
+@@ -321,7 +325,17 @@
+ fail:
+   if (!J->mcarea) {  /* Switch to a new range now. */
+     void *p;
+   newrange:
++#if LJ_TARGET_OSX
++    /* Start at a random address guaranteed to be elsewhere. */
++    hint = ((uintptr_t)(void *)lj_vm_exit_handler & U64x(00000fff,ffff0000)) ^
++          (lj_prng_u64(&J2G(J)->prng) & U64x(000000ff,ffff0000)) ^
++          U64x(00004c4a,00000000);
++    p = mcode_alloc_at(hint, sz, MCPROT_GEN);
++    if (!p)  /* Otherwise anywhere. */
++      p = mcode_alloc_at(0, sz, MCPROT_GEN);
++#else
+     p = mcode_alloc_at(0, sz, MCPROT_GEN);
++#endif
+     if (p) {
+       mcode_setrange(J, (uintptr_t)p + (sz >> 1));
+       return p;  /* Success. */

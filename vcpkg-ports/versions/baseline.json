@@ -62,7 +62,7 @@
         },
         "luajit": {
             "baseline": "2026-10-14",
-            "port-version": 1
+            "port-version": 2
         },
         "re2": {
             "baseline": "2024-06-01",
@@ -88,7 +88,7 @@
         },
         "luajit": {
             "baseline": "2026-10-14",
-            "port-version": 1
+            "port-version": 2
         },
         "re2": {
             "baseline": "2024-06-01",
