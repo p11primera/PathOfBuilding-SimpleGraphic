@@ -6,8 +6,8 @@ endif()
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO LuaJIT/LuaJIT
-    REF a553b3de243b1ae07bdb21da4bdab77148793f76  #2026-02-26
-    SHA512 5c504989e6a0726277143ecb1eb25e08e20803141dd5cfe83ea716b23bde2542e21310ae350da34ef3b3a10f4709e45426f7ad05ef08983dd01f370b83199dac
+    REF 2a8e017ef1ece6a95b983ffca073d30609dce7c4  #2026-10-14 v2.1 HEAD — includes the v3.0 syntax backport (compound assignment += etc, LuaJIT#1476) that upstream PoB2 src now requires
+    SHA512 03a95a4be7676a4bd1cef4e22ef73162263eb7b34d8e8ae4622acefd4a64c6a79775de53ca191f0971db8c56a75017634574c35f8b78d8e3a3fa8124779bde6c
     HEAD_REF v2.1
     PATCHES
         msvcbuild.patch
